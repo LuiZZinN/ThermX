@@ -62,8 +62,27 @@ h2, h3 {
     color: #f8fafc !important;
 }
 
+p, span, div, li {
+    color: #cbd5e1 !important;
+}
+
+[data-testid="stMetricValue"] div {
+    color: #f8fafc !important;
+}
+
+[data-testid="stMetricLabel"] p {
+    color: #94a3b8 !important;
+}
+
 hr {
     border-color: #1e293b;
+}
+
+/* Force light text in Expander contents */
+[data-testid="stExpanderDetails"] p, 
+[data-testid="stExpanderDetails"] li, 
+[data-testid="stExpanderDetails"] span {
+    color: #e2e8f0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -329,14 +348,105 @@ def calculate(state):
 
     steps.append(f"- Coeficiente Global U = {U:.2f}")
 
+    y_plus = state.get('yPlusTarget', 5.0)
+    cf_t = 0.058 * (Re_t**-0.2) if Re_t > 0 else 0
+    tau_wall_t = cf_t * hotF['density'] * (v_t**2) / 2
+    u_tau_t = math.sqrt(tau_wall_t / hotF['density']) if tau_wall_t > 0 else 0.01
+    dy_int = y_plus * hotF['mu'] / (hotF['density'] * u_tau_t) if u_tau_t > 0 else 1e-5
+
+    cf_s = 0.058 * (max(Re_s, 1)**-0.2)
+    tau_wall_s = cf_s * coldF['density'] * (v_s**2) / 2
+    u_tau_s = math.sqrt(tau_wall_s / coldF['density']) if tau_wall_s > 0 else 0.01
+    dy_ext = y_plus * coldF['mu'] / (coldF['density'] * u_tau_s) if u_tau_s > 0 else 1e-5
+
+    courant = state.get('courantNumber', 5.0)
+    estimatedTimeStep = courant * 0.01 / max(v_t, v_s, 0.001)
+
     return {
         'U': U, 'Area': Nt * math.pi * Do * state['tubeLength'],
         'Nt': Nt, 'v_t': v_t, 'v_s': v_s, 'h_i': h_i, 'h_o': h_o,
         'warnings': warnings,
         'q': q, 'lmtd': lmtd, 'F': F, 'hotOutletT': hotOutletT, 'coldOutletT': coldOutletT,
         'Re_t': Re_t, 'Re_s': Re_s, 'deltaPTube': deltaPTube, 'deltaPShell': deltaPShell,
-        'steps': steps
+        'steps': steps,
+        'dy_int': dy_int, 'dy_ext': dy_ext, 'estimatedTimeStep': estimatedTimeStep
     }
+
+def generate_solidworks_macro(state, results):
+    is_cross = state.get('geometryType') == 'cross-flow-bank'
+    do_half = state['shellDo'] / 2
+    if is_cross:
+        draw_base = f"Part.SketchManager.CreateCenterRectangle 0, 0, 0, {do_half:.4f}, {do_half:.4f}, 0"
+    else:
+        draw_base = f"Part.SketchManager.CreateCircleByRadius2 0, 0, 0, {do_half:.4f}"
+        
+    return f"""' SW VBA Macro para Geometria de Trocador de Calor
+Dim swApp As Object
+Dim Part As Object
+Dim boolstatus As Boolean
+Dim longstatus As Long, longwarnings As Long
+
+Sub main()
+    Set swApp = Application.SldWorks
+    Set Part = swApp.NewDocument("C:\\ProgramData\\SolidWorks\\SOLIDWORKS 202X\\templates\\Part.prtdot", 0, 0, 0)
+    swApp.ActivateDoc2 "Peça1", False, longstatus
+    
+    Part.Extension.SelectByID2 "Plano frontal", "PLANE", 0, 0, 0, False, 0, Nothing, 0
+    Part.SketchManager.InsertSketch True
+    {draw_base}
+    Part.FeatureManager.FeatureExtrusion3 True, False, False, 0, 0, {state['tubeLength']:.4f}, 0, False, False, False, False, 0, 0, False, False, False, False, True, True, True, 0, 0, False
+
+    ' Padrão para os Tubos (Numero previsto: {results['Nt']})
+    Part.Extension.SelectByID2 "Face frontal", "FACE", 0, 0, 0, False, 0, Nothing, 0
+    Part.SketchManager.InsertSketch True
+    Part.SketchManager.CreateCircleByRadius2 0, 0, 0, {(state['tubeDo']/2000):.4f}
+    Part.FeatureManager.FeatureCut4 True, False, False, 1, 0, {state['tubeLength']:.4f}, 0, False, False, False, False, 1.74532925199433E-02, 1.74532925199433E-02, False, False, False, False, False, True, True, True, True, False, 0, 0, False, False
+End Sub"""
+
+def generate_fluent_meshing(state, results):
+    return f""";; Script ANSYS Fluent Meshing (TUI)
+/file/import/cad "TrocadorCalor_Geometria.STEP"
+/size-functions/create curvature-size
+/size-functions/set-scaling-parameters 1.2
+/mesh/prism/controls/grow-prisms geometric
+/mesh/prism/controls/number-of-layers 12
+/mesh/prism/controls/growth-rate 1.2
+
+/mesh/prism/controls/zone-specific-prisms "tube_walls_internal" yes
+/mesh/prism/controls/zone-specific-first-height "tube_walls_internal" {results['dy_int']:.4e}
+
+/mesh/prism/controls/zone-specific-prisms "tube_walls_external" yes
+/mesh/prism/controls/zone-specific-first-height "tube_walls_external" {results['dy_ext']:.4e}
+
+/mesh/volume/polyhedra
+/mesh/volume/create yes
+/mesh/repair/improve-quality
+/file/write-mesh "TrocadorCalor_Malha.msh"
+"""
+
+def generate_fluent_setup(state, results):
+    turbTui = "/define/models/viscous/ke-standard yes" if state.get('turbModel') == 'k-epsilon' else "/define/models/viscous/kw-sst yes"
+    is_transient = state.get('simType') == 'transient'
+    transientTui = f"/define/models/unsteady-2nd-order yes\n/solve/set/time-step {results['estimatedTimeStep']:.4e}\n/solve/dual-time-iterate {state.get('timeSteps', 100)} {state.get('iterPerStep', 20)}" if is_transient else f"/solve/iterate {state.get('iterSteady', 100)}"
+    return f""";; Script ANSYS Fluent Setup & Solve (TUI)
+/file/read-case "TrocadorCalor_Malha.msh"
+/define/models/energy yes
+{turbTui}
+
+/define/boundary-conditions/mass-flow-inlet tube_inlet yes yes {state['hotMdot']} no {state['hotInletT'] + 273.15}
+/define/boundary-conditions/mass-flow-inlet shell_inlet yes yes {state['coldMdot']} no {state['coldInletT'] + 273.15}
+
+/solve/monitors/surface/set-monitor "hot-outlet-temp" "mass-avg" "temperature" "tube_outlet" () yes yes "hot_out_t.out"
+/solve/monitors/surface/set-monitor "cold-outlet-temp" "mass-avg" "temperature" "shell_outlet" () yes yes "cold_out_t.out"
+/solve/monitors/surface/set-monitor "total-heat-flux" "integral" "heat-flux" "tube_walls" () yes yes "heat_flux.out"
+
+/solve/monitors/residual/convergence-criteria {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)}
+
+/solve/initialize/hyb-initialization
+{transientTui}
+/file/write-case-data "TrocadorCalor_Resolvido.cas"
+"""
+
 
 
 # --- UI ---
@@ -415,7 +525,7 @@ with tab1:
         fouling_cold = st.number_input("Fator Frio (m².K/W)", value=0.0002, format="%.4f")
 
 with tab2:
-    if st.button("Executar Simulação"):
+    if st.button("Executar Simulação", type="primary"):
         state = {
             'solveTarget': solve_target,
             'targetHeatDuty': heat_duty * 1000,
@@ -444,45 +554,130 @@ with tab2:
         
         try:
             res = calculate(state)
-            
-            if res['warnings']:
-                for w in res['warnings']:
-                    st.error(w)
-
-            st.write("### 📈 Desempenho Termodinâmico")
-            col_res1, col_res2, col_res3, col_res4, col_res5, col_res6 = st.columns(6)
-            col_res1.metric("Calor Troc. (kW)", f"{(res['q']/1000):.2f}")
-            col_res2.metric("LMTD (°C)", f"{res['lmtd']:.2f}")
-            col_res3.metric("Fator F", f"{res['F']:.2f}")
-            col_res4.metric("T Saída Q.", f"{res['hotOutletT']:.2f}")
-            col_res5.metric("T Saída F.", f"{res['coldOutletT']:.2f}")
-            col_res6.metric("U Global", f"{res['U']:.1f}")
-            
-            st.write("### 📐 Dimensionamento da Geometria")
-            col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-            col_g1.metric("Área Necess. (m²)", f"{res['Area']:.2f}")
-            col_g2.metric("Nº Tubos", res['Nt'])
-            col_g3.metric("Vel. Tubos (m/s)", f"{res['v_t']:.3f}")
-            col_g4.metric("Vel. Casco (m/s)", f"{res['v_s']:.3f}")
-
-            st.write("### 🔬 Fenômenos de Transporte")
-            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-            col_f1.metric("Reynolds Tubos", f"{res['Re_t']:.0f}")
-            col_f2.metric("Reynolds Casco", f"{res['Re_s']:.0f}")
-            col_f3.metric("ΔP Tubos (kPa)", f"{(res['deltaPTube']/1000):.2f}")
-            col_f4.metric("ΔP Casco (kPa)", f"{(res['deltaPShell']/1000):.2f}")
-
-            with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
-                st.markdown("\n".join(res['steps']))
+            st.session_state['res'] = res
+            st.session_state['state'] = state
         except Exception as e:
             st.error(f"Erro no cálculo: {e}")
+
+    if 'res' in st.session_state:
+        res = st.session_state['res']
+        
+        if res['warnings']:
+            for w in res['warnings']:
+                st.error(w)
+
+        st.write("### 📈 Desempenho Termodinâmico")
+        col_res1, col_res2, col_res3, col_res4, col_res5, col_res6 = st.columns(6)
+        col_res1.metric("Calor Troc. (kW)", f"{(res['q']/1000):.2f}")
+        col_res2.metric("LMTD (°C)", f"{res['lmtd']:.2f}")
+        col_res3.metric("Fator F", f"{res['F']:.2f}")
+        col_res4.metric("T Saída Q.", f"{res['hotOutletT']:.2f}")
+        col_res5.metric("T Saída F.", f"{res['coldOutletT']:.2f}")
+        col_res6.metric("U Global", f"{res['U']:.1f}")
+        
+        st.write("### 📐 Dimensionamento da Geometria")
+        col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+        col_g1.metric("Área Necess. (m²)", f"{res['Area']:.2f}")
+        col_g2.metric("Nº Tubos", res['Nt'])
+        col_g3.metric("Vel. Tubos (m/s)", f"{res['v_t']:.3f}")
+        col_g4.metric("Vel. Casco (m/s)", f"{res['v_s']:.3f}")
+
+        st.write("### 🔬 Fenômenos de Transporte")
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        col_f1.metric("Reynolds Tubos", f"{res['Re_t']:.0f}")
+        col_f2.metric("Reynolds Casco", f"{res['Re_s']:.0f}")
+        col_f3.metric("ΔP Tubos (kPa)", f"{(res['deltaPTube']/1000):.2f}")
+        col_f4.metric("ΔP Casco (kPa)", f"{(res['deltaPShell']/1000):.2f}")
+
+        with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
+            st.markdown("\n\n".join(res['steps']))
     else:
         st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Executar Simulação'.")
 
 with tab3:
-    st.write("### Vista 2D da Geometria")
-    st.info("A implementação do desenho com matplotlib ou canvas seria gerada aqui baseado no arranjo e Nt.")
+    st.write("### Vista de Seção Transversal do Trocador Térmico")
+    if 'state' in st.session_state:
+        stt = st.session_state['state']
+        rs = st.session_state['res']
+        
+        do = stt['shellDo'] * 1000  # meters to mm
+        pt = stt['tubePitch']
+        n_tubes = min(rs['Nt'], 1000)
+        
+        svg_elements = []
+        svg_width = 600
+        svg_height = 600
+        center_x = svg_width / 2
+        center_y = svg_height / 2
+        scale = min(svg_width, svg_height) / (do * 1.2) if do > 0 else 1
+        
+        if stt['geometryType'] == 'shell-tube':
+            # Draw shell
+            svg_elements.append(f'<circle cx="{center_x}" cy="{center_y}" r="{do/2 * scale}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+            
+            pts_side = math.ceil(math.sqrt(n_tubes) * 1.2)
+            count = 0
+            for i in range(-pts_side, pts_side):
+                for j in range(-pts_side, pts_side):
+                    x_dist = i * pt
+                    y_dist = j * pt
+                    
+                    if x_dist*x_dist + y_dist*y_dist < ((do/2)*0.9)**2:
+                        cx = center_x + x_dist * scale
+                        cy = center_y + y_dist * scale
+                        r = (stt['tubeDo']/2) * scale
+                        svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                        count += 1
+                        if count >= n_tubes: break
+                if count >= n_tubes: break
+        else:
+            w = math.sqrt(n_tubes) * pt
+            w_scaled = w * scale
+            rect_x = center_x - w_scaled/2
+            rect_y = center_y - w_scaled/2
+            svg_elements.append(f'<rect x="{rect_x}" y="{rect_y}" width="{w_scaled}" height="{w_scaled}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+            
+            pts_side = math.ceil(math.sqrt(n_tubes))
+            count = 0
+            is_staggered = stt['bundleAlignment'] == 'staggered'
+            for i in range(pts_side):
+                for j in range(pts_side):
+                    offset = pt/2 if (is_staggered and i%2!=0) else 0
+                    x_dist = -w/2 + i * pt + offset
+                    y_dist = -w/2 + j * pt
+                    
+                    if (x_dist < w/2) and (y_dist < w/2):
+                        cx = center_x + x_dist * scale
+                        cy = center_y + y_dist * scale
+                        r = (stt['tubeDo']/2) * scale
+                        svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                        count += 1
+                        if count >= n_tubes: break
+                if count >= n_tubes: break
+
+        svg_content = f'''
+        <div style="background-color: #0f172a; padding: 20px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
+            <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+                {"".join(svg_elements)}
+            </svg>
+        </div>
+        '''
+        st.markdown(svg_content, unsafe_allow_html=True)
+    else:
+         st.info("Execute a simulação primeiro.")
 
 with tab4:
-    st.write("### Scripts Sugeridos para OpenFOAM / Fluent CFD")
-    st.info("Scripts para geração de malha estruturada com BlockMesh e SnappyHexMesh seriam gerados aqui.")
+    if 'state' in st.session_state:
+        stt = st.session_state['state']
+        rs = st.session_state['res']
+        
+        st.write("### 💻 Script SolidWorks Macro (VBA)")
+        st.code(generate_solidworks_macro(stt, rs), language="vbnet")
+        
+        st.write("### 🔲 Script Fluent Meshing (TUI)")
+        st.code(generate_fluent_meshing(stt, rs), language="scheme")
+        
+        st.write("### 🔧 Script Fluent Setup & Solver (TUI)")
+        st.code(generate_fluent_setup(stt, rs), language="scheme")
+    else:
+        st.info("Execute a simulação primeiro.")
