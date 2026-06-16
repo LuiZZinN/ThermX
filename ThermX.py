@@ -90,14 +90,20 @@ def calculate(state):
         lmtd = max(dT1, dT2, 1)
 
     F = 1.0
-    if state['geometryType'] == 'cross-flow-bank':
+    if state['geometryType'] == 'cross-flow-bank' or state['geometryType'] == 'shell-tube':
         R = abs((state['hotInletT'] - hotOutletT) / (coldOutletT - state['coldInletT']))
         P = abs((coldOutletT - state['coldInletT']) / (state['hotInletT'] - state['coldInletT']))
         if R != 1 and P > 0 and P < 1:
             num = math.sqrt(R*R + 1) * math.log((1 - P) / (1 - P*R))
             denInner = (2 - P*(R + 1 - math.sqrt(R*R + 1))) / (2 - P*(R + 1 + math.sqrt(R*R + 1)))
             F_calc = num / ((R - 1) * math.log(denInner))
-            if F_calc > 0.4: F = F_calc
+            if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+        elif R == 1 and P > 0 and P < 1:
+            num = (P / (1 - P)) * math.sqrt(2)
+            denInner = (2 - P*(2 - math.sqrt(2))) / (2 - P*(2 + math.sqrt(2)))
+            F_calc = num / math.log(denInner)
+            if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+            
         if F < 0.75:
             warnings.append(f"Aviso de Baixa Eficiência Térmica (F = {F:.2f}).")
 
@@ -144,12 +150,15 @@ def calculate(state):
         Nu_t = 4.36
         if Re_t >= 10000:
             Nu_t = 0.023 * (Re_t**0.8) * (hotF['prandtl']**0.3)
+        elif Re_t > 2300:
+            f_pet = (0.79 * math.log(Re_t) - 1.64)**(-2)
+            Nu_t = ((f_pet / 8) * (Re_t - 1000) * hotF['prandtl']) / (1 + 12.7 * (f_pet / 8)**0.5 * (hotF['prandtl']**(2/3) - 1))
             
         h_i = Nu_t * hotF['k'] / Di
         
         # Escoamento externo
         As = 0
-        if state['geometryType'] != 'cross-flow-bank':
+        if state['geometryType'] == 'shell-tube':
             As = (Pt - Do) * state['shellDo'] * state['baffleSpacing'] / Pt
             v_s = coldMdot / (coldF['density'] * As)
             D_eq = (4 * ((Pt**2) - (math.pi * (Do**2) / 4))) / (math.pi * Do)
@@ -171,10 +180,17 @@ def calculate(state):
             v_s = v_max
             Re_s = abs(coldF['density'] * v_s * Do / coldF['mu'])
             
-            C, m = 0.022, 0.84
-            if state['bundleAlignment'] == 'staggered':
-                if Re_s < 1000:
-                    C, m = 0.51, 0.50
+            C, m = 0, 0
+            if state['bundleAlignment'] == 'aligned':
+                if Re_s < 100: C, m = 0.80, 0.40
+                elif Re_s < 1000: C, m = 0.22, 0.63
+                elif Re_s < 200000: C, m = 0.27, 0.63
+                else: C, m = 0.021, 0.84
+            else:
+                if Re_s < 100: C, m = 0.90, 0.40
+                elif Re_s < 1000: C, m = 0.51, 0.50
+                elif Re_s < 200000: C, m = 0.35 * ((ST/max(SL, 0.001))**0.2), 0.60
+                else: C, m = 0.022, 0.84
             
             Nu_s = C * (Re_s**m) * (coldF['prandtl']**0.36) * ((coldF['prandtl'] / coldF_surface['prandtl'])**0.25)
             h_o = Nu_s * coldF['k'] / Do
@@ -187,6 +203,8 @@ def calculate(state):
         A_req = q / (U * lmtd * F)
         Nt_new = math.ceil(A_req / (math.pi * Do * state['tubeLength']))
         Nt = math.ceil(0.4 * Nt_new + 0.6 * Nt)
+        if Nt < 1: Nt = 1
+        if Nt > 2000: Nt = 2000
         
     return {
         'U': U, 'Area': Nt * math.pi * Do * state['tubeLength'],
@@ -198,9 +216,12 @@ st.title("Simulador de Trocador de Calor Térmico")
 
 st.sidebar.header("Parâmetros do Problema")
 q = st.sidebar.number_input("Carga Térmica (W)", value=417000)
+
+hot_fluid = st.sidebar.selectbox("Fluido Quente", ['water', 'air', 'oil', 'ethylene'], index=0)
 T_hot_in = st.sidebar.number_input("T Quente Entrada (°C)", value=90)
 M_hot = st.sidebar.number_input("Vazão Quente (kg/s)", value=5.0)
 
+cold_fluid = st.sidebar.selectbox("Fluido Frio", ['water', 'air', 'oil', 'ethylene'], index=0)
 T_cold_in = st.sidebar.number_input("T Frio Entrada (°C)", value=25)
 M_cold = st.sidebar.number_input("Vazão Frio (kg/s)", value=10.0)
 
@@ -214,8 +235,8 @@ if st.button("Simular"):
     state = {
         'solveTarget': 'heat_duty',
         'targetHeatDuty': q,
-        'hotFluidId': 'water',
-        'coldFluidId': 'air' if geom_type == 'cross-flow-bank' else 'water',
+        'hotFluidId': hot_fluid,
+        'coldFluidId': cold_fluid,
         'hotInletT': T_hot_in,
         'hotMdot': M_hot,
         'coldInletT': T_cold_in,
