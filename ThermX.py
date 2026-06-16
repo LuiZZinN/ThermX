@@ -84,6 +84,17 @@ hr {
 [data-testid="stExpanderDetails"] span {
     color: #e2e8f0 !important;
 }
+
+/* Form Inputs Contrast Fixes */
+div[data-baseweb="select"] > div, 
+div[data-baseweb="select"] span,
+div[data-baseweb="popover"] span,
+input {
+    color: #f8fafc !important;
+}
+input {
+    background-color: #0f172a !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -171,6 +182,8 @@ def calculate(state):
     hotF = evaluate_fluid_props(state['hotFluidId'], state['hotInletT'])
     coldF = evaluate_fluid_props(state['coldFluidId'], state['coldInletT'])
 
+    steps.append("- Resolvendo o Balanço de Energia: $Q = \\dot{m} C_p \\Delta T$")
+
     for iter in range(10):
         if state['solveTarget'] == 'hot_outlet':
             q = coldMdot * coldF['cp'] * (coldOutletT - state['coldInletT'])
@@ -229,6 +242,14 @@ def calculate(state):
 
     if math.isnan(lmtd) or lmtd <= 0: lmtd = 1
 
+    steps.append(f"- Diferença de Temperatura Logarítmica (LMTD) calculada: **{lmtd:.2f} °C**")
+    if state['geometryType'] in ['cross-flow-bank', 'shell-tube']:
+        steps.append(f"- Fator de Correção $F$: **{F:.2f}**")
+        if F < 0.75:
+            steps.append("- *Aviso:* Fator F abaixo de 0.75 indica baixa eficiência térmica neste arranjo.")
+
+    steps.append("\\n## 2. Coeficientes de Transferência de Calor (Convecção)")
+    
     Do = state['tubeDo'] / 1000
     t = state['tubeThickness'] / 1000
     Di = Do - 2 * t
@@ -302,6 +323,7 @@ def calculate(state):
             v_s = v_max
             Re_s = abs(coldF['density'] * v_s * Do / coldF['mu'])
             
+            # Zhukauskas correl.
             C, m = 0, 0
             if state.get('bundleAlignment', 'staggered') == 'aligned':
                 if Re_s < 100: C, m = 0.80, 0.40
@@ -316,6 +338,22 @@ def calculate(state):
             
             Nu_s = C * (max(Re_s, 1)**m) * (coldF['prandtl']**0.36) * ((coldF['prandtl'] / coldF_surface['prandtl'])**0.25)
             h_o = Nu_s * coldF['k'] / Do
+
+        if i == 19:  # Last iteration, save detailed steps
+            steps.append(f"**Lado dos Tubos (Fluido Quente):**")
+            steps.append(f"- Número final iterativo de tubos: $N_t = {Nt}$")
+            steps.append(f"- $Re_{{tubos}} = {Re_t:.1f}$ (Velocidade média: {v_t:.3f} m/s)")
+            steps.append(f"- Correlação (Dittus-Boelter / Gnielinski): $Nu_{{tubos}} = {Nu_t:.2f}$")
+            steps.append(f"- Coef. Conv. Interno $h_i = {h_i:.2f} \\; W/m^2K$")
+            
+            steps.append(f"\\**Lado do Casco / Banco (Fluido Frio):**")
+            steps.append(f"- $Re_{{ext}} = {Re_s:.1f}$ (Velocidade máx.: {v_s:.3f} m/s)")
+            if state['geometryType'] == 'cross-flow-bank':
+                steps.append(f"- Correlação de Zhukauskas aplicada (Arranjo {state.get('bundleAlignment')}, C={C:.3f}, m={m:.2f})")
+            else:
+                steps.append(f"- Correlação de Kern estimada")
+            steps.append(f"- $Nu_{{ext}} = {Nu_s:.2f}$")
+            steps.append(f"- Coef. Conv. Externo $h_o = {h_o:.2f} \\; W/m^2K$")
 
         R_wall = (Do / (2 * mat['k'])) * math.log(Do / Di)
         R_fi = state.get('foulingHot', 0.0001) * (Do / Di)
@@ -346,7 +384,12 @@ def calculate(state):
     if hotF['density'] > 500 and v_t < 1.0:
         warnings.append(f"Velocidade muito baixa lado tubos ({v_t:.2f} m/s).")
 
-    steps.append(f"- Coeficiente Global U = {U:.2f}")
+    steps.append("\\n## 3. Coeficiente Global e Queda de Pressão")
+    steps.append(f"- Área Total de Troca: $A = {Nt * math.pi * Do * state['tubeLength']:.2f} \\; m^2$")
+    steps.append(f"- Coeficiente Global $U = \\cfrac{{1}}{{\\cfrac{{1}}{{h_i}} + R_{{wall}} + R_{{fi}} + R_{{fo}} + \\cfrac{{1}}{{h_o}}}} = {U:.2f} \\; W/m^2K$")
+    steps.append(f"- Fator de Atrito Darcy Lado Tubos: $f = {f_t:.4f}$")
+    steps.append(f"- Queda de Pressão Lado Tubos: $\\Delta P = {(deltaPTube/1000):.2f} \\; kPa$")
+    steps.append(f"- Queda de Pressão Lado Casco: $\\Delta P = {(deltaPShell/1000):.2f} \\; kPa$")
 
     y_plus = state.get('yPlusTarget', 5.0)
     cf_t = 0.058 * (Re_t**-0.2) if Re_t > 0 else 0
@@ -595,7 +638,7 @@ with tab2:
         st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Executar Simulação'.")
 
 with tab3:
-    st.write("### Vista de Seção Transversal do Trocador Térmico")
+    st.write("### Modelos da Geometria (2D e Isométrico)")
     if 'state' in st.session_state:
         stt = st.session_state['state']
         rs = st.session_state['res']
@@ -604,80 +647,164 @@ with tab3:
         pt = stt['tubePitch']
         n_tubes = min(rs['Nt'], 1000)
         
-        svg_elements = []
-        svg_width = 600
-        svg_height = 600
-        center_x = svg_width / 2
-        center_y = svg_height / 2
-        scale = min(svg_width, svg_height) / (do * 1.2) if do > 0 else 1
-        
-        if stt['geometryType'] == 'shell-tube':
-            # Draw shell
-            svg_elements.append(f'<circle cx="{center_x}" cy="{center_y}" r="{do/2 * scale}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+        col_t3_1, col_t3_2 = st.columns(2)
+        with col_t3_1:
+            st.markdown("#### Vista de Seção Transversal")
+            svg_elements = []
+            svg_width = 400
+            svg_height = 400
+            center_x = svg_width / 2
+            center_y = svg_height / 2
+            scale = min(svg_width, svg_height) / (do * 1.2) if do > 0 and stt['geometryType'] == 'shell-tube' else min(svg_width, svg_height) / (math.sqrt(n_tubes) * pt * 1.2) if n_tubes > 0 and pt > 0 else 1
             
-            pts_side = math.ceil(math.sqrt(n_tubes) * 1.2)
-            count = 0
-            for i in range(-pts_side, pts_side):
-                for j in range(-pts_side, pts_side):
-                    x_dist = i * pt
-                    y_dist = j * pt
-                    
-                    if x_dist*x_dist + y_dist*y_dist < ((do/2)*0.9)**2:
-                        cx = center_x + x_dist * scale
-                        cy = center_y + y_dist * scale
-                        r = (stt['tubeDo']/2) * scale
-                        svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
-                        count += 1
-                        if count >= n_tubes: break
-                if count >= n_tubes: break
-        else:
-            w = math.sqrt(n_tubes) * pt
-            w_scaled = w * scale
-            rect_x = center_x - w_scaled/2
-            rect_y = center_y - w_scaled/2
-            svg_elements.append(f'<rect x="{rect_x}" y="{rect_y}" width="{w_scaled}" height="{w_scaled}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
-            
-            pts_side = math.ceil(math.sqrt(n_tubes))
-            count = 0
-            is_staggered = stt['bundleAlignment'] == 'staggered'
-            for i in range(pts_side):
-                for j in range(pts_side):
-                    offset = pt/2 if (is_staggered and i%2!=0) else 0
-                    x_dist = -w/2 + i * pt + offset
-                    y_dist = -w/2 + j * pt
-                    
-                    if (x_dist < w/2) and (y_dist < w/2):
-                        cx = center_x + x_dist * scale
-                        cy = center_y + y_dist * scale
-                        r = (stt['tubeDo']/2) * scale
-                        svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
-                        count += 1
-                        if count >= n_tubes: break
-                if count >= n_tubes: break
+            if stt['geometryType'] == 'shell-tube':
+                # Draw shell
+                svg_elements.append(f'<circle cx="{center_x}" cy="{center_y}" r="{do/2 * scale}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+                
+                pts_side = math.ceil(math.sqrt(n_tubes) * 1.2)
+                count = 0
+                for i in range(-pts_side, pts_side):
+                    for j in range(-pts_side, pts_side):
+                        x_dist = i * pt
+                        y_dist = j * pt
+                        
+                        if x_dist*x_dist + y_dist*y_dist < ((do/2)*0.9)**2:
+                            cx = center_x + x_dist * scale
+                            cy = center_y + y_dist * scale
+                            r = (stt['tubeDo']/2) * scale
+                            svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                            count += 1
+                            if count >= n_tubes: break
+                    if count >= n_tubes: break
+            else:
+                w = math.sqrt(n_tubes) * pt
+                w_scaled = w * scale
+                rect_x = center_x - w_scaled/2
+                rect_y = center_y - w_scaled/2
+                svg_elements.append(f'<rect x="{rect_x}" y="{rect_y}" width="{w_scaled}" height="{w_scaled}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+                
+                pts_side = math.ceil(math.sqrt(n_tubes))
+                count = 0
+                is_staggered = stt['bundleAlignment'] == 'staggered'
+                for i in range(pts_side):
+                    for j in range(pts_side):
+                        offset = pt/2 if (is_staggered and i%2!=0) else 0
+                        x_dist = -w/2 + i * pt + offset
+                        y_dist = -w/2 + j * pt
+                        
+                        if (x_dist < w/2) and (y_dist < w/2):
+                            cx = center_x + x_dist * scale
+                            cy = center_y + y_dist * scale
+                            r = (stt['tubeDo']/2) * scale
+                            svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                            count += 1
+                            if count >= n_tubes: break
+                    if count >= n_tubes: break
 
-        svg_content = f'''
-        <div style="background-color: #0f172a; padding: 20px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-            <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
-                {"".join(svg_elements)}
-            </svg>
-        </div>
-        '''
-        st.markdown(svg_content, unsafe_allow_html=True)
+            svg_content = f'''
+            <div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
+                <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+                    {"".join(svg_elements)}
+                </svg>
+            </div>
+            '''
+            st.markdown(svg_content, unsafe_allow_html=True)
+            
+        with col_t3_2:
+            st.markdown("#### Diagrama Isométrico (Esquemático de Fluxos)")
+            
+            # Simple Schematic logic
+            schematic_svg = f'''
+            <div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
+                <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    
+                    <!-- Cylinder / Core Body -->
+                    <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+                    <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+                    
+                    <!-- Hot Fluid In (Red) - Tubes -->
+                    <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
+                    <polygon points="100,195 110,200 100,205" fill="#f97316"/>
+                    <text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
+                    
+                    <!-- Hot Fluid Out -->
+                    <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
+                    <polygon points="380,195 390,200 380,205" fill="#f97316"/>
+                    <text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
+                    
+                    <!-- Cold Fluid In (Blue) - Shell/Bank -->
+                    <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+                    <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
+                    <text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
+
+                    <!-- Cold Fluid Out -->
+                    <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+                    <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
+                    <text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
+                </svg>
+            </div>
+            '''
+            st.markdown(schematic_svg, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.write("### 💻 Script SolidWorks Macro (VBA)")
+        st.code(generate_solidworks_macro(stt, rs), language="vbnet")
+        
     else:
-         st.info("Execute a simulação primeiro.")
+         st.info("Execute a simulação primeiro na aba Setup.")
 
 with tab4:
     if 'state' in st.session_state:
         stt = st.session_state['state']
         rs = st.session_state['res']
         
-        st.write("### 💻 Script SolidWorks Macro (VBA)")
-        st.code(generate_solidworks_macro(stt, rs), language="vbnet")
+        st.write("### Geração de Scripts CFD (OpenFOAM / Fluent)")
         
-        st.write("### 🔲 Script Fluent Meshing (TUI)")
-        st.code(generate_fluent_meshing(stt, rs), language="scheme")
+        cfd_col1, cfd_col2 = st.columns([1, 2])
         
-        st.write("### 🔧 Script Fluent Setup & Solver (TUI)")
-        st.code(generate_fluent_setup(stt, rs), language="scheme")
+        with cfd_col1:
+            st.markdown("#### Configurações Base")
+            sim_type = st.radio("Método", ['Permanente (Steady)', 'Transiente'])
+            turb_model = st.selectbox("Modelo de Turbulência", ['k-epsilon Standard', 'k-omega SST'])
+            y_plus = st.number_input("Valor Y+ Almejado (Camada Limite)", value=35.0, min_value=0.1)
+            iter_total = st.number_input("Iterações Máximas", value=500, min_value=10)
+            res_target = st.number_input("Critérios de Convergência (Resíduos)", value=1e-4, format="%.5f")
+            
+            # Atualiza objeto state com essas definições locais e recomputa o deltaT
+            stt['simType'] = 'transient' if sim_type == 'Transiente' else 'steady'
+            stt['turbModel'] = 'k-epsilon' if turb_model == 'k-epsilon Standard' else 'k-omega'
+            stt['yPlusTarget'] = y_plus
+            stt['iterSteady'] = iter_total
+            stt['residualsTarget'] = res_target
+            
+            # Recalcula Y+ scripts rapidinhos sem precisar ir pro backend pesado
+            hotF = evaluate_fluid_props(stt['hotFluidId'], stt['hotInletT'])
+            coldF = evaluate_fluid_props(stt['coldFluidId'], stt['coldInletT'])
+            cf_t = 0.058 * (rs['Re_t']**-0.2) if rs['Re_t'] > 0 else 0
+            u_tau_t = math.sqrt((cf_t * hotF['density'] * (rs['v_t']**2) / 2) / hotF['density']) if rs['v_t'] > 0 else 0.01
+            rs['dy_int'] = y_plus * hotF['mu'] / (hotF['density'] * u_tau_t) if u_tau_t > 0 else 1e-5
+            
+            cf_s = 0.058 * (max(rs['Re_s'], 1)**-0.2)
+            u_tau_s = math.sqrt((cf_s * coldF['density'] * (rs['v_s']**2) / 2) / coldF['density']) if rs['v_s'] > 0 else 0.01
+            rs['dy_ext'] = y_plus * coldF['mu'] / (coldF['density'] * u_tau_s) if u_tau_s > 0 else 1e-5
+
+        with cfd_col2:
+            st.markdown("#### Scripts Exportados (ANSYS Fluent TUI)")
+            st.write("##### 1. Fluent Meshing (TUI) - PolyHexcore e Camada Limite")
+            st.code(generate_fluent_meshing(stt, rs), language="scheme")
+            
+            st.write("##### 2. Fluent Setup & Solver (TUI) - Condições de Contorno")
+            st.code(generate_fluent_setup(stt, rs), language="scheme")
+            
     else:
         st.info("Execute a simulação primeiro.")
