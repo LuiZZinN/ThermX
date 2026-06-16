@@ -177,13 +177,6 @@ def calculate(state):
     coldOutletT = state['coldTargetOutletT']
     q = 0
 
-    steps.append("## 1. Inicialização e Balanceamento Térmico")
-    
-    hotF = evaluate_fluid_props(state['hotFluidId'], state['hotInletT'])
-    coldF = evaluate_fluid_props(state['coldFluidId'], state['coldInletT'])
-
-    steps.append("- Resolvendo o Balanço de Energia: $Q = \\dot{m} C_p \\Delta T$")
-
     for iter in range(10):
         if state['solveTarget'] == 'hot_outlet':
             q = coldMdot * coldF['cp'] * (coldOutletT - state['coldInletT'])
@@ -218,6 +211,7 @@ def calculate(state):
         lmtd = (dT1 - dT2) / math.log(dT1 / dT2)
 
     F = 1.0
+    R, P = 1.0, 0.0
     if state['geometryType'] in ['cross-flow-bank', 'shell-tube']:
         R = abs((state['hotInletT'] - hotOutletT) / (coldOutletT - state['coldInletT'])) if coldOutletT != state['coldInletT'] else 1.0
         P = abs((coldOutletT - state['coldInletT']) / (state['hotInletT'] - state['coldInletT'])) if state['hotInletT'] != state['coldInletT'] else 0.0
@@ -242,13 +236,30 @@ def calculate(state):
 
     if math.isnan(lmtd) or lmtd <= 0: lmtd = 1
 
-    steps.append(f"- Diferença de Temperatura Logarítmica (LMTD) calculada: **{lmtd:.2f} °C**")
-    if state['geometryType'] in ['cross-flow-bank', 'shell-tube']:
-        steps.append(f"- Fator de Correção $F$: **{F:.2f}**")
-        if F < 0.75:
-            steps.append("- *Aviso:* Fator F abaixo de 0.75 indica baixa eficiência térmica neste arranjo.")
+    T_surface = ((state['hotInletT'] + hotOutletT)/2 + (state['coldInletT'] + coldOutletT)/2) / 2
+    coldF_surface = evaluate_fluid_props(state['coldFluidId'], T_surface)
 
-    steps.append("\\n## 2. Coeficientes de Transferência de Calor (Convecção)")
+    steps.append("## 1. Avaliação das Propriedades dos Fluidos")
+    steps.append("As propriedades termo-físicas foram avaliadas nas temperaturas médias de cada fluido no trocador:")
+    steps.append(f"- **Fluido Quente (Tubos):** $T_{{m,q}} = {T_hot_mean:.2f} ^\\circ C$")
+    steps.append(f"  - $\\rho = {hotF['density']:.2f} \\; kg/m^3$, $C_p = {hotF['cp']:.2f} \\; J/kg \\cdot K$, $k = {hotF['k']:.4f} \\; W/m \\cdot K$, $\\mu = {hotF['mu']:.6f} \\; Pa \\cdot s$, $Pr = {hotF['prandtl']:.2f}$")
+    steps.append(f"- **Fluido Frio (Casco/Banco):** $T_{{m,f}} = {T_cold_mean:.2f} ^\\circ C$")
+    steps.append(f"  - $\\rho = {coldF['density']:.2f} \\; kg/m^3$, $C_p = {coldF['cp']:.2f} \\; J/kg \\cdot K$, $k = {coldF['k']:.4f} \\; W/m \\cdot K$, $\\mu = {coldF['mu']:.6f} \\; Pa \\cdot s$, $Pr = {coldF['prandtl']:.2f}$")
+    steps.append(f"  - Propriedades na temperatura de superfície ($T_s = {T_surface:.2f} ^\\circ C$) para correção de viscosidade: $Pr_s = {coldF_surface['prandtl']:.2f}$")
+
+    steps.append("\\n## 2. Balanço Térmico e Diferença Média de Temperatura")
+    steps.append("- Resolvendo o Balanço de Energia Analítico: $Q = \\dot{m}_{quente} C_{p,quente} (T_{ent,q} - T_{sai,q}) = \\dot{m}_{frio} C_{p,frio} (T_{sai,f} - T_{ent,f})$")
+    steps.append(f"  - **$Q_{{Trocado}}$ = {q/1000:.2f} kW**")
+    steps.append(f"  - Vazões: $\\dot{{m}}_{{quente}} = {hotMdot:.3f} \\; kg/s$, $\\dot{{m}}_{{frio}} = {coldMdot:.3f} \\; kg/s$")
+    steps.append(f"  - Temperaturas Quente: $T_{{ent}} = {state['hotInletT']:.2f} ^\\circ C \\rightarrow T_{{sai}} = {hotOutletT:.2f} ^\\circ C$")
+    steps.append(f"  - Temperaturas Frio: $T_{{ent}} = {state['coldInletT']:.2f} ^\\circ C \\rightarrow T_{{sai}} = {coldOutletT:.2f} ^\\circ C$")
+    steps.append(f"- Diferença de Temperatura Logarítmica Média (LMTD) calculada: **$\\Delta T_{{lm}} = {lmtd:.2f} ^\\circ C$**")
+    if state['geometryType'] in ['cross-flow-bank', 'shell-tube']:
+        steps.append(f"- Fator de Correção Geométrica $F$: **{F:.3f}** (Baseado nos parâmetros R={R:.3f} e P={P:.3f})")
+        if F < 0.75:
+            steps.append("  - ⚠️ *Aviso:* Fator F < 0.75 indica baixo rendimento para esta geometria. Considerar alterar passes ou configuração.")
+
+    steps.append("\\n## 3. Coeficientes de Transferência de Calor (Correlações Específicas)")
     
     Do = state['tubeDo'] / 1000
     t = state['tubeThickness'] / 1000
@@ -256,10 +267,8 @@ def calculate(state):
     Pt = state['tubePitch'] / 1000
 
     Nt = 20
-    U, v_t, v_s, Re_t, Re_s, h_i, h_o = 500, 0, 0, 0, 0, 1000, 1000
+    U, v_t, v_s, Re_t, Re_s, h_i, h_o, A_cross_t, As, N_L = 500, 0, 0, 0, 0, 1000, 1000, 0.001, 0.001, 1
 
-    T_surface = ((state['hotInletT'] + hotOutletT)/2 + (state['coldInletT'] + coldOutletT)/2) / 2
-    coldF_surface = evaluate_fluid_props(state['coldFluidId'], T_surface)
     w_effective = state['shellDo']
 
     for i in range(20):
@@ -342,18 +351,18 @@ def calculate(state):
         if i == 19:  # Last iteration, save detailed steps
             steps.append(f"**Lado dos Tubos (Fluido Quente):**")
             steps.append(f"- Número final iterativo de tubos: $N_t = {Nt}$")
-            steps.append(f"- $Re_{{tubos}} = {Re_t:.1f}$ (Velocidade média: {v_t:.3f} m/s)")
-            steps.append(f"- Correlação (Dittus-Boelter / Gnielinski): $Nu_{{tubos}} = {Nu_t:.2f}$")
-            steps.append(f"- Coef. Conv. Interno $h_i = {h_i:.2f} \\; W/m^2K$")
+            steps.append(f"- Número de Reynolds $Re_{{tubos}} = \\frac{{\\rho v_t D_i}}{{\\mu}} = {Re_t:.1f}$ (Regime: {'Turbulento' if Re_t > 4000 else 'Transição/Laminar'})")
+            steps.append(f"- Número de Nusselt (Correlação de Dittus-Boelter / Gnielinski): $Nu_{{tubos}} = {Nu_t:.2f}$")
+            steps.append(f"- Coeficiente Convectivo Interno $h_i = \\frac{{Nu_t k}}{{D_i}} = {h_i:.2f} \\; W/m^2K$")
             
-            steps.append(f"\\**Lado do Casco / Banco (Fluido Frio):**")
-            steps.append(f"- $Re_{{ext}} = {Re_s:.1f}$ (Velocidade máx.: {v_s:.3f} m/s)")
+            steps.append(f"**Lado do Casco / Banco (Fluido Frio):**")
+            steps.append(f"- Número de Reynolds Ext. $Re_{{ext}} = {Re_s:.1f}$ (Baseado na velocidade de $\\approx {v_s:.3f}$ m/s)")
             if state['geometryType'] == 'cross-flow-bank':
-                steps.append(f"- Correlação de Zhukauskas aplicada (Arranjo {state.get('bundleAlignment')}, C={C:.3f}, m={m:.2f})")
+                steps.append(f"- Correlação de Zhukauskas aplicada para Banco de Tubos (Arranjo {state.get('bundleAlignment')}, Constantes $C={C:.3f}, m={m:.2f}$)")
             else:
-                steps.append(f"- Correlação de Kern estimada")
-            steps.append(f"- $Nu_{{ext}} = {Nu_s:.2f}$")
-            steps.append(f"- Coef. Conv. Externo $h_o = {h_o:.2f} \\; W/m^2K$")
+                steps.append(f"- Correlação de Kern estimada para Casco e Tubos (Chicanas = {state.get('baffleSpacing', 0.5):.2f}m)")
+            steps.append(f"- Número de Nusselt Externo $Nu_{{ext}} = {Nu_s:.2f}$")
+            steps.append(f"- Coeficiente Convectivo Externo $h_o = {h_o:.2f} \\; W/m^2K$")
 
         R_wall = (Do / (2 * mat['k'])) * math.log(Do / Di)
         R_fi = state.get('foulingHot', 0.0001) * (Do / Di)
@@ -384,12 +393,31 @@ def calculate(state):
     if hotF['density'] > 500 and v_t < 1.0:
         warnings.append(f"Velocidade muito baixa lado tubos ({v_t:.2f} m/s).")
 
-    steps.append("\\n## 3. Coeficiente Global e Queda de Pressão")
-    steps.append(f"- Área Total de Troca: $A = {Nt * math.pi * Do * state['tubeLength']:.2f} \\; m^2$")
-    steps.append(f"- Coeficiente Global $U = \\cfrac{{1}}{{\\cfrac{{1}}{{h_i}} + R_{{wall}} + R_{{fi}} + R_{{fo}} + \\cfrac{{1}}{{h_o}}}} = {U:.2f} \\; W/m^2K$")
-    steps.append(f"- Fator de Atrito Darcy Lado Tubos: $f = {f_t:.4f}$")
-    steps.append(f"- Queda de Pressão Lado Tubos: $\\Delta P = {(deltaPTube/1000):.2f} \\; kPa$")
-    steps.append(f"- Queda de Pressão Lado Casco: $\\Delta P = {(deltaPShell/1000):.2f} \\; kPa$")
+    steps.append("\\n## 4. Queda de Pressão")
+    steps.append("**Lado dos Tubos (Fluido Quente):**")
+    steps.append(f"- Fator de Atrito de Darcy $f_t = {f_t:.4f}$")
+    steps.append(f"- Queda de pressão principal: $\\Delta P_{{tubos}} = f_t \\frac{{L}}{{D_i}} \\frac{{\\rho v^2}}{{2}} = {(deltaPTube/1000):.2f} \\; kPa$")
+    steps.append("**Lado do Casco/Banco (Fluido Frio):**")
+    if state['geometryType'] == 'shell-tube':
+        steps.append(f"- Diâmetro Equivalente do Casco $D_{{eq}} = {D_eq:.3f} \\; m$")
+        steps.append(f"- Número de Chicanas Estimado: N_{{ch}} = {numBaffles}")
+    else:
+        steps.append(f"- Número de fileiras longitudinais $N_L = {N_L}$")
+    steps.append(f"- Queda de pressão avaliada: $\\Delta P_{{ext}} = {(deltaPShell/1000):.2f} \\; kPa$")
+
+    steps.append("\\n## 5. Resumo Geométrico e Global")
+    steps.append("- Disposição dos Tubos: $N_t = {Nt}$ tubos, Diâmetro Interno: $D_i = {(Di*1000):.2f} mm$, Passo (Pitch): $P_T = {(Pt*1000):.1f} mm$")
+    steps.append("- Área Livre e Velocidades:")
+    steps.append(f"  - Tubos: Área da seção transversal interna $A_{{c,in}} = {(max(A_cross_t, 1e-6)):.4f} \\; m^2$ $\\rightarrow v_t = {v_t:.3f} \\; m/s$")
+    if state['geometryType'] == 'shell-tube':
+        steps.append(f"  - Casco: Área livre com chicanas $A_s = {(max(As, 1e-6)):.4f} \\; m^2$ $\\rightarrow v_s = {v_s:.4f} \\; m/s$")
+    else:
+        steps.append(f"  - Banco: Velocidade máxima no feixe $v_{{max}} = {v_s:.4f} \\; m/s$")
+        
+    steps.append(f"- Área Total de Troca Térmica: $A_{{total}} = {Nt * math.pi * Do * state['tubeLength']:.3f} \\; m^2$")
+    steps.append(f"- Coeficiente Global de Transferência Térmica:")
+    steps.append(f"  - $U = \\left[ \\frac{{1}}{{h_i}} \\frac{{D_o}}{{D_i}} + R_{{parede}} + R_{{fouling,i}} + R_{{fouling,o}} + \\frac{{1}}{{h_o}} \\right]^{{-1}} = {U:.2f} \\; W/m^2K$")
+
 
     y_plus = state.get('yPlusTarget', 5.0)
     cf_t = 0.058 * (Re_t**-0.2) if Re_t > 0 else 0
@@ -410,6 +438,7 @@ def calculate(state):
         'Nt': Nt, 'v_t': v_t, 'v_s': v_s, 'h_i': h_i, 'h_o': h_o,
         'warnings': warnings,
         'q': q, 'lmtd': lmtd, 'F': F, 'hotOutletT': hotOutletT, 'coldOutletT': coldOutletT,
+        'hotMdot': hotMdot, 'coldMdot': coldMdot,
         'Re_t': Re_t, 'Re_s': Re_s, 'deltaPTube': deltaPTube, 'deltaPShell': deltaPShell,
         'steps': steps,
         'dy_int': dy_int, 'dy_ext': dy_ext, 'estimatedTimeStep': estimatedTimeStep
@@ -663,9 +692,9 @@ with tab2:
         col_res1.metric("Calor Troc. (kW)", f"{(res['q']/1000):.2f}")
         col_res2.metric("LMTD (°C)", f"{res['lmtd']:.2f}")
         col_res3.metric("Fator F", f"{res['F']:.2f}")
-        col_res4.metric("T Saída Q.", f"{res['hotOutletT']:.2f}")
-        col_res5.metric("T Saída F.", f"{res['coldOutletT']:.2f}")
-        col_res6.metric("U Global", f"{res['U']:.1f}")
+        col_res4.metric("T Saída Q. (°C)", f"{res['hotOutletT']:.2f}")
+        col_res5.metric("T Saída F. (°C)", f"{res['coldOutletT']:.2f}")
+        col_res6.metric("U Global (W/m²K)", f"{res['U']:.1f}")
         
         st.write("### 📐 Dimensionamento da Geometria")
         col_g1, col_g2, col_g3, col_g4 = st.columns(4)
