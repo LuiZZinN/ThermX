@@ -214,55 +214,79 @@ def calculate(state):
 
 st.title("Simulador de Trocador de Calor Térmico")
 
-st.sidebar.header("Parâmetros do Problema")
-q = st.sidebar.number_input("Carga Térmica (W)", value=417000)
+tab1, tab2, tab3, tab4 = st.tabs(["Setup", "Cálculos Analíticos", "Desenho 2D", "Scripts CFD/CAD"])
 
-hot_fluid = st.sidebar.selectbox("Fluido Quente", ['water', 'air', 'oil', 'ethylene'], index=0)
-T_hot_in = st.sidebar.number_input("T Quente Entrada (°C)", value=90)
-M_hot = st.sidebar.number_input("Vazão Quente (kg/s)", value=5.0)
+with tab1:
+    st.header("Parâmetros do Problema")
+    col1, col2 = st.columns(2)
+    with col1:
+        q = st.number_input("Carga Térmica (W)", value=417000)
+        hot_fluid = st.selectbox("Fluido Quente", ['water', 'air', 'oil', 'ethylene'], index=0)
+        T_hot_in = st.number_input("T Quente Entrada (°C)", value=90.0)
+        M_hot = st.number_input("Vazão Quente (kg/s)", value=5.0)
 
-cold_fluid = st.sidebar.selectbox("Fluido Frio", ['water', 'air', 'oil', 'ethylene'], index=0)
-T_cold_in = st.sidebar.number_input("T Frio Entrada (°C)", value=25)
-M_cold = st.sidebar.number_input("Vazão Frio (kg/s)", value=10.0)
+    with col2:
+        cold_fluid = st.selectbox("Fluido Frio", ['water', 'air', 'oil', 'ethylene'], index=0)
+        T_cold_in = st.number_input("T Frio Entrada (°C)", value=25.0)
+        M_cold = st.number_input("Vazão Frio (kg/s)", value=10.0)
 
-st.sidebar.header("Geometria")
-geom_type = st.sidebar.selectbox("Tipo de Trocador", ['cross-flow-bank', 'shell-tube'])
-alignment = st.sidebar.selectbox("Alinhamento", ['staggered', 'aligned'])
-length = st.sidebar.number_input("Comprimento do Tubo (m)", value=3.0)
-shell_do = st.sidebar.number_input("Largura do Duto (m)", value=0.6)
+    st.header("Geometria")
+    col3, col4 = st.columns(2)
+    with col3:
+        geom_type = st.selectbox("Tipo de Trocador", ['cross-flow-bank', 'shell-tube'])
+        alignment = st.selectbox("Alinhamento", ['staggered', 'aligned'])
+    with col4:
+        length = st.number_input("Comprimento do Tubo (m)", value=3.0)
+        shell_do = st.number_input("Largura do Duto (m)", value=0.6)
 
-if st.button("Simular"):
-    state = {
-        'solveTarget': 'heat_duty',
-        'targetHeatDuty': q,
-        'hotFluidId': hot_fluid,
-        'coldFluidId': cold_fluid,
-        'hotInletT': T_hot_in,
-        'hotMdot': M_hot,
-        'coldInletT': T_cold_in,
-        'coldMdot': M_cold,
-        'materialId': 'copper',
-        'geometryType': geom_type,
-        'bundleAlignment': alignment,
-        'tubeLength': length,
-        'shellDo': shell_do,
-        'tubeDo': 19.05,
-        'tubeThickness': 1.65,
-        'tubePitch': 25.4,
-        'foulingHot': 0.0001,
-        'foulingCold': 0.0002
-    }
-    
-    res = calculate(state)
-    
-    st.write("### Resultados")
-    st.metric("Coeficiente Global U (W/m²K)", f"{res['U']:.2f}")
-    st.metric("Área Requerida (m²)", f"{res['Area']:.2f}")
-    st.metric("Número de Tubos", res['Nt'])
-    st.metric("Velocidade Interna (m/s)", f"{res['v_t']:.3f}")
-    st.metric("Velocidade Externa Máxima (m/s)", f"{res['v_s']:.3f}")
-    
-    if res['warnings']:
-        st.warning("Avisos:")
-        for w in res['warnings']:
-            st.write(f"- {w}")
+with tab2:
+    if st.button("Simular"):
+        state = {
+            'solveTarget': 'heat_duty',
+            'targetHeatDuty': q,
+            'hotFluidId': hot_fluid,
+            'coldFluidId': cold_fluid,
+            'hotInletT': T_hot_in,
+            'hotMdot': M_hot,
+            'coldInletT': T_cold_in,
+            'coldMdot': M_cold,
+            'materialId': 'copper',
+            'geometryType': geom_type,
+            'bundleAlignment': alignment,
+            'tubeLength': length,
+            'shellDo': shell_do,
+            'tubeDo': 19.05,
+            'tubeThickness': 1.65,
+            'tubePitch': 25.4,
+            'foulingHot': 0.0001,
+            'foulingCold': 0.0002
+        }
+        
+        res = calculate(state)
+        
+        st.write("### Resultados")
+        col_res1, col_res2, col_res3 = st.columns(3)
+        col_res1.metric("Coeficiente Global U (W/m²K)", f"{res['U']:.2f}")
+        col_res2.metric("Área Requerida (m²)", f"{res['Area']:.2f}")
+        col_res3.metric("Número de Tubos Total", res['Nt'])
+        
+        col_res4, col_res5, col_res6 = st.columns(3)
+        col_res4.metric("Vel. Interna (m/s)", f"{res['v_t']:.3f}")
+        col_res5.metric("Vel. Externa Máx. (m/s)", f"{res['v_s']:.3f}")
+        col_res6.metric("Coef. Interno h_i", f"{res['h_i']:.1f}")
+
+        if res['warnings']:
+            st.warning("Avisos:")
+            for w in res['warnings']:
+                st.write(f"- {w}")
+    else:
+        st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Simular'.")
+
+with tab3:
+    st.write("### Vista 2D do Trocador Frontal")
+    st.info("Os recursos de desenho 2D estarão disponíveis nesta aba.")
+
+with tab4:
+    st.write("### Scripts para CFD")
+    st.code("# Exemplo de script de geração de malha no Fluent\n/define/models/energy yes\n/define/materials/change-create fluid fluid water-liquid ...\n", language='bash')
+
