@@ -62,10 +62,6 @@ h2, h3 {
     color: #f8fafc !important;
 }
 
-p, span, div, li {
-    color: #cbd5e1 !important;
-}
-
 [data-testid="stMetricValue"] div {
     color: #f8fafc !important;
 }
@@ -92,8 +88,12 @@ div[data-baseweb="popover"] span,
 input {
     color: #f8fafc !important;
 }
+div[data-baseweb="select"] > div,
 input {
-    background-color: #0f172a !important;
+    background-color: #1e293b !important;
+}
+div[data-baseweb="popover"] {
+    background-color: #1e293b !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -495,6 +495,89 @@ def generate_fluent_setup(state, results):
 # --- UI ---
 st.title("🔥 ThermoX - Trocador de Calor")
 
+# --- Initialize Session State Variables ---
+if 's_targ' not in st.session_state:
+    st.session_state.s_targ = 'heat_duty'
+    st.session_state.s_heat_duty = 417.0
+    st.session_state.s_h_fluid = 'water'
+    st.session_state.s_c_fluid = 'water'
+    st.session_state.s_h_in = 90.0
+    st.session_state.s_h_mdot = 5.0
+    st.session_state.s_h_out = 70.0
+    st.session_state.s_c_in = 25.0
+    st.session_state.s_c_mdot = 10.0
+    st.session_state.s_c_out = 35.0
+    
+    st.session_state.s_g_type = 'shell-tube'
+    st.session_state.s_mat = 'copper'
+    st.session_state.s_do = 0.6
+    st.session_state.s_baffle = 0.5
+    st.session_state.s_t_do = 19.05
+    st.session_state.s_t_th = 1.65
+    st.session_state.s_length = 3.0
+    st.session_state.s_t_pitch = 25.4
+    st.session_state.s_arr = 'staggered'
+    st.session_state.s_t_passes = 2
+    st.session_state.s_t_pl = 25.4
+    st.session_state.s_f_h = 0.0001
+    st.session_state.s_f_c = 0.0002
+
+def update_calc():
+    try:
+        # Pega estado anterior dos inputs (usando chaves do session_state via st.number_input key)
+        state = {
+            'solveTarget': st.session_state.s_targ,
+            'targetHeatDuty': st.session_state.s_heat_duty * 1000,
+            'hotFluidId': st.session_state.s_h_fluid,
+            'coldFluidId': st.session_state.s_c_fluid,
+            'hotInletT': st.session_state.s_h_in,
+            'hotMdot': st.session_state.s_h_mdot,
+            'hotTargetOutletT': st.session_state.s_h_out,
+            'coldInletT': st.session_state.s_c_in,
+            'coldMdot': st.session_state.s_c_mdot,
+            'coldTargetOutletT': st.session_state.s_c_out,
+            'materialId': st.session_state.s_mat,
+            'geometryType': st.session_state.s_g_type,
+            'bundleAlignment': st.session_state.s_arr,
+            'tubeLength': st.session_state.s_length,
+            'shellDo': st.session_state.s_do,
+            'baffleSpacing': st.session_state.s_baffle,
+            'tubeDo': st.session_state.s_t_do,
+            'tubeThickness': st.session_state.s_t_th,
+            'tubePitch': st.session_state.s_t_pitch,
+            'tubePitchLongitudinal': st.session_state.s_t_pl,
+            'tubePasses': st.session_state.s_t_passes,
+            'foulingHot': st.session_state.s_f_h,
+            'foulingCold': st.session_state.s_f_c
+        }
+        res = calculate(state)
+        # Apply consequences!
+        s_targ = state['solveTarget']
+        if s_targ == 'heat_duty':
+            st.session_state.s_h_out = float(res['hotOutletT'])
+            st.session_state.s_c_out = float(res['coldOutletT'])
+        elif s_targ == 'hot_outlet':
+            st.session_state.s_h_out = float(res['hotOutletT'])
+            st.session_state.s_heat_duty = float(res['q'] / 1000)
+        elif s_targ == 'cold_outlet':
+            st.session_state.s_c_out = float(res['coldOutletT'])
+            st.session_state.s_heat_duty = float(res['q'] / 1000)
+        elif s_targ == 'hot_mdot':
+            st.session_state.s_h_mdot = float(res['hotMdot'])
+            st.session_state.s_heat_duty = float(res['q'] / 1000)
+        elif s_targ == 'cold_mdot':
+            st.session_state.s_c_mdot = float(res['coldMdot'])
+            st.session_state.s_heat_duty = float(res['q'] / 1000)
+            
+        st.session_state['res'] = res
+        st.session_state['state'] = state
+    except Exception as e:
+        pass
+
+# Force initial calc if none exists
+if 'res' not in st.session_state:
+    update_calc()
+
 tab1, tab2, tab3, tab4 = st.tabs(["Setup", "Cálculos Analíticos", "Desenho 2D", "Scripts CFD/CAD"])
 
 with tab1:
@@ -502,15 +585,15 @@ with tab1:
     
     col_bal_1, col_bal_2 = st.columns(2)
     with col_bal_1:
-        solve_target = st.selectbox("Calcular:", [
+        st.selectbox("Calcular:", [
             ('heat_duty', "Definir Fluxo de Calor (Calcular Ambas Saídas)"),
             ('hot_outlet', "Calcular Temperatura de Saída (Quente/Tubo)"),
             ('cold_outlet', "Calcular Temperatura de Saída (Frio/Casco)"),
             ('hot_mdot', "Calcular Vazão Mássica Necessária (Quente)"),
             ('cold_mdot', "Calcular Vazão Mássica Necessária (Frio)"),
-        ], format_func=lambda x: x[1])[0]
+        ], format_func=lambda x: x[1], key='s_targ', on_change=update_calc)
     with col_bal_2:
-        heat_duty = st.number_input("Fluxo de Calor Desejado (kW)", value=417.0, disabled=(solve_target != 'heat_duty'))
+        st.number_input("Fluxo de Calor Desejado (kW)", key='s_heat_duty', disabled=(st.session_state.s_targ != 'heat_duty'), on_change=update_calc)
 
     st.markdown("---")
 
@@ -519,90 +602,56 @@ with tab1:
 
     with col_hot:
         st.markdown("### 🌡️ Fluido Quente (Tubos)")
-        hot_fluid = st.selectbox("Tipo de Fluido Quente", fluid_opts, format_func=lambda x: x[1])[0]
-        hot_inlet_t = st.number_input("Temp. Entrada Quente (°C)", value=90.0)
-        hot_mdot = st.number_input("Vazão Mássica Quente (kg/s)", value=5.0, disabled=(solve_target == 'hot_mdot'))
-        hot_target_outlet_t = st.number_input("Temp. Saída Quente (°C) (Alvo)", value=70.0, disabled=(solve_target in ['hot_outlet', 'heat_duty']))
+        st.selectbox("Tipo de Fluido Quente", fluid_opts, format_func=lambda x: x[1], key='s_h_fluid', on_change=update_calc)
+        st.number_input("Temp. Entrada Quente (°C)", key='s_h_in', on_change=update_calc)
+        st.number_input("Vazão Mássica Quente (kg/s)", key='s_h_mdot', disabled=(st.session_state.s_targ == 'hot_mdot'), on_change=update_calc)
+        st.number_input("Temp. Saída Quente (°C) (Alvo/Calculado)", key='s_h_out', disabled=(st.session_state.s_targ in ['hot_outlet', 'heat_duty']), on_change=update_calc)
 
     with col_cold:
         st.markdown("### 💧 Fluido Frio (Casco)")
-        cold_fluid = st.selectbox("Tipo de Fluido Frio", fluid_opts, format_func=lambda x: x[1])[0]
-        cold_inlet_t = st.number_input("Temp. Entrada Fria (°C)", value=25.0)
-        cold_mdot = st.number_input("Vazão Mássica Fria (kg/s)", value=10.0, disabled=(solve_target == 'cold_mdot'))
-        cold_target_outlet_t = st.number_input("Temp. Saída Fria (°C) (Alvo)", value=35.0, disabled=(solve_target in ['cold_outlet', 'heat_duty']))
+        st.selectbox("Tipo de Fluido Frio", fluid_opts, format_func=lambda x: x[1], key='s_c_fluid', on_change=update_calc)
+        st.number_input("Temp. Entrada Fria (°C)", key='s_c_in', on_change=update_calc)
+        st.number_input("Vazão Mássica Fria (kg/s)", key='s_c_mdot', disabled=(st.session_state.s_targ == 'cold_mdot'), on_change=update_calc)
+        st.number_input("Temp. Saída Fria (°C) (Alvo/Calculado)", key='s_c_out', disabled=(st.session_state.s_targ in ['cold_outlet', 'heat_duty']), on_change=update_calc)
 
     st.markdown("---")
 
     col_geom, col_foul = st.columns(2)
     with col_geom:
         st.markdown("### 📦 Geometria Externa & Tubos")
-        geom_type = st.selectbox("Tipo de Trocador", [('shell-tube', 'Casco e Tubos'), ('cross-flow-bank', 'Banco de Tubos')], format_func=lambda x: x[1])[0]
-        material = st.selectbox("Material de Construção", [('copper', 'Cobre'), ('aluminum', 'Alumínio'), ('steel', 'Aço Carbono'), ('ss304', 'Inox 304')], format_func=lambda x: x[1])[0]
+        st.selectbox("Tipo de Trocador", [('shell-tube', 'Casco e Tubos'), ('cross-flow-bank', 'Banco de Tubos')], format_func=lambda x: x[1], key='s_g_type', on_change=update_calc)
+        st.selectbox("Material de Construção", [('copper', 'Cobre'), ('aluminum', 'Alumínio'), ('steel', 'Aço Carbono'), ('ss304', 'Inox 304')], format_func=lambda x: x[1], key='s_mat', on_change=update_calc)
         
         row1_g1, row1_g2 = st.columns(2)
         with row1_g1:
-            shell_do = st.number_input("Diâmetro / Largura (m)", value=0.6)
+            st.number_input("Diâmetro / Largura (m)", key='s_do', on_change=update_calc)
         with row1_g2:
-            baffle_spacing = st.number_input("Espaç. Chicanas (m)", value=0.5, disabled=(geom_type != 'shell-tube'))
+            st.number_input("Espaç. Chicanas (m)", key='s_baffle', disabled=(st.session_state.s_g_type != 'shell-tube'), on_change=update_calc)
 
         row2_g1, row2_g2, row2_g3 = st.columns(3)
         with row2_g1:
-            tube_do = st.number_input("Ø Ext. Tubo(mm)", value=19.05)
+            st.number_input("Ø Ext. Tubo(mm)", key='s_t_do', on_change=update_calc)
         with row2_g2:
-            tube_thickness = st.number_input("Espessura (mm)", value=1.65)
+            st.number_input("Espessura (mm)", key='s_t_th', on_change=update_calc)
         with row2_g3:
-            tube_length = st.number_input("Comp. (m)", value=3.0)
+            st.number_input("Comp. (m)", key='s_length', on_change=update_calc)
 
         row3_g1, row3_g2, row3_g3 = st.columns(3)
         with row3_g1:
-            tube_pitch = st.number_input("Passo (mm)", value=25.4)
-            bundle_alignment = st.selectbox("Arranjo", [('aligned', 'Alinhado'), ('staggered', 'Desalinhado')], format_func=lambda x: x[1], disabled=(geom_type == 'shell-tube'))[0]
+            st.number_input("Passo (mm)", key='s_t_pitch', on_change=update_calc)
+            st.selectbox("Arranjo", [('aligned', 'Alinhado'), ('staggered', 'Desalinhado')], format_func=lambda x: x[1], key='s_arr', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
         with row3_g2:
-            tube_passes = st.number_input("Passes Tubo (N)", value=2, disabled=(geom_type != 'shell-tube'))
+            st.number_input("Passes Tubo (N)", key='s_t_passes', disabled=(st.session_state.s_g_type != 'shell-tube'), on_change=update_calc)
         with row3_g3:
-            tube_pitch_longitudinal = st.number_input("P. Long. (SL) mm", value=25.4, disabled=(geom_type == 'shell-tube'))
+            st.number_input("P. Long. (SL) mm", key='s_t_pl', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
 
     with col_foul:
         st.markdown("### ⚙️ Fator de Encrustração (Fouling)")
-        fouling_hot = st.number_input("Fator Quente (m².K/W)", value=0.0001, format="%.4f")
-        fouling_cold = st.number_input("Fator Frio (m².K/W)", value=0.0002, format="%.4f")
+        st.number_input("Fator Quente (m².K/W)", format="%.4f", key='s_f_h', on_change=update_calc)
+        st.number_input("Fator Frio (m².K/W)", format="%.4f", key='s_f_c', on_change=update_calc)
 
 with tab2:
-    if st.button("Executar Simulação", type="primary"):
-        state = {
-            'solveTarget': solve_target,
-            'targetHeatDuty': heat_duty * 1000,
-            'hotFluidId': hot_fluid,
-            'coldFluidId': cold_fluid,
-            'hotInletT': hot_inlet_t,
-            'hotMdot': hot_mdot,
-            'hotTargetOutletT': hot_target_outlet_t,
-            'coldInletT': cold_inlet_t,
-            'coldMdot': cold_mdot,
-            'coldTargetOutletT': cold_target_outlet_t,
-            'materialId': material,
-            'geometryType': geom_type,
-            'bundleAlignment': bundle_alignment,
-            'tubeLength': tube_length,
-            'shellDo': shell_do,
-            'baffleSpacing': baffle_spacing,
-            'tubeDo': tube_do,
-            'tubeThickness': tube_thickness,
-            'tubePitch': tube_pitch,
-            'tubePitchLongitudinal': tube_pitch_longitudinal,
-            'tubePasses': tube_passes,
-            'foulingHot': fouling_hot,
-            'foulingCold': fouling_cold
-        }
-        
-        try:
-            res = calculate(state)
-            st.session_state['res'] = res
-            st.session_state['state'] = state
-        except Exception as e:
-            st.error(f"Erro no cálculo: {e}")
-
-    if 'res' in st.session_state:
+    if 'res' in st.session_state and st.session_state['res'] is not None:
         res = st.session_state['res']
         
         if res['warnings']:
@@ -800,11 +849,14 @@ with tab4:
 
         with cfd_col2:
             st.markdown("#### Scripts Exportados (ANSYS Fluent TUI)")
-            st.write("##### 1. Fluent Meshing (TUI) - PolyHexcore e Camada Limite")
-            st.code(generate_fluent_meshing(stt, rs), language="scheme")
             
-            st.write("##### 2. Fluent Setup & Solver (TUI) - Condições de Contorno")
-            st.code(generate_fluent_setup(stt, rs), language="scheme")
+            def render_terminal(title, content):
+                st.write(f"##### {title}")
+                st.markdown(f'<div style="background-color: #0f172a; color: #22c55e; border: 1px solid #1e293b; padding: 15px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto;">{content}</div>', unsafe_allow_html=True)
+                st.write("")
+
+            render_terminal("1. Fluent Meshing (TUI) - PolyHexcore e Camada Limite", generate_fluent_meshing(stt, rs))
+            render_terminal("2. Fluent Setup & Solver (TUI) - Condições de Contorno", generate_fluent_setup(stt, rs))
             
     else:
         st.info("Execute a simulação primeiro.")
