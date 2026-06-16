@@ -1,6 +1,73 @@
 import streamlit as st
 import math
 
+st.set_page_config(layout="wide", page_title="ThermoX", page_icon="🔥", initial_sidebar_state="collapsed")
+
+st.markdown("""
+<style>
+/* Custom Dark Theme to match React App */
+[data-testid="stAppViewContainer"] {
+    background-color: #020617;
+    color: #cbd5e1;
+    font-family: 'Inter', sans-serif;
+}
+[data-testid="stHeader"] {
+    background-color: #020617;
+}
+header.stAppHeader {
+    border-bottom: 1px solid #1e293b;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background-color: rgba(15, 23, 42, 0.5);
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid #1e293b;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 40px;
+    background-color: transparent;
+    border-radius: 8px;
+    color: #94a3b8;
+    border: none;
+    padding: 0 20px;
+}
+.stTabs [aria-selected="true"] {
+    background-color: rgba(14, 165, 233, 0.1) !important;
+    color: #38bdf8 !important;
+    border: 1px solid rgba(14, 165, 233, 0.2) !important;
+}
+
+/* Metric Cards */
+[data-testid="stMetric"] {
+    background-color: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+}
+[data-testid="stMetricLabel"] {
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+[data-testid="stMetricValue"] {
+    color: #f8fafc;
+    font-size: 1.5rem;
+    font-family: monospace;
+}
+
+h2, h3 {
+    color: #f8fafc !important;
+}
+
+hr {
+    border-color: #1e293b;
+}
+</style>
+""", unsafe_allow_html=True)
+
 FLUIDS = {
     'water': {'name': 'Água Líquida', 'density': 998, 'cp': 4182, 'k': 0.6, 'mu': 0.001002, 'prandtl': 6.99},
     'air': {'name': 'Ar (Gás Ideial)', 'density': 1.225, 'cp': 1006, 'k': 0.0242, 'mu': 1.78e-5, 'prandtl': 0.73},
@@ -15,6 +82,7 @@ MATERIALS = {
     'ss304': {'name': 'Aço Inox 304', 'density': 8000, 'k': 16.2}
 }
 
+# --- Properties Logic ---
 def interpolate_linear(x, x0, y0, x1, y1):
     if x0 == x1: return y0
     return y0 + (x - x0) * (y1 - y0) / (x1 - x0)
@@ -37,29 +105,37 @@ def get_interpolated_props(T_kelvin, table):
     return table[0]
 
 air_table = [
+    {'T': 250, 'density': 1.4128, 'cp': 1006, 'mu': 159.9e-7, 'k': 22.3e-3, 'pr': 0.720},
     {'T': 300, 'density': 1.1614, 'cp': 1007, 'mu': 184.6e-7, 'k': 26.3e-3, 'pr': 0.707},
+    {'T': 350, 'density': 0.9950, 'cp': 1009, 'mu': 208.2e-7, 'k': 30.0e-3, 'pr': 0.700},
     {'T': 400, 'density': 0.8711, 'cp': 1014, 'mu': 230.1e-7, 'k': 33.8e-3, 'pr': 0.690},
+    {'T': 450, 'density': 0.7740, 'cp': 1021, 'mu': 250.7e-7, 'k': 37.3e-3, 'pr': 0.686},
     {'T': 500, 'density': 0.6964, 'cp': 1029, 'mu': 270.1e-7, 'k': 40.7e-3, 'pr': 0.684},
     {'T': 600, 'density': 0.5804, 'cp': 1051, 'mu': 305.8e-7, 'k': 46.9e-3, 'pr': 0.685},
+    {'T': 800, 'density': 0.4354, 'cp': 1099, 'mu': 371.1e-7, 'k': 57.3e-3, 'pr': 0.709},
+    {'T': 1000, 'density': 0.3482, 'cp': 1141, 'mu': 430.3e-7, 'k': 66.7e-3, 'pr': 0.739},
 ]
 
 water_table = [
+    {'T': 273.15, 'density': 999.8, 'cp': 4217, 'mu': 1750e-6, 'k': 0.569, 'pr': 12.99},
+    {'T': 280, 'density': 1000.0, 'cp': 4198, 'mu': 1422e-6, 'k': 0.582, 'pr': 10.26},
     {'T': 300, 'density': 997.0, 'cp': 4179, 'mu': 855e-6, 'k': 0.613, 'pr': 5.83},
     {'T': 320, 'density': 989.0, 'cp': 4180, 'mu': 577e-6, 'k': 0.640, 'pr': 3.77},
     {'T': 340, 'density': 979.0, 'cp': 4188, 'mu': 420e-6, 'k': 0.660, 'pr': 2.66},
+    {'T': 360, 'density': 967.0, 'cp': 4203, 'mu': 324e-6, 'k': 0.674, 'pr': 2.02},
+    {'T': 373.15, 'density': 958.0, 'cp': 4217, 'mu': 279e-6, 'k': 0.680, 'pr': 1.76},
 ]
 
 def evaluate_fluid_props(fluid_id, T_celcius):
     base_fluid = FLUIDS[fluid_id].copy()
     T_k = T_celcius + 273.15
     if fluid_id == 'air':
-        props = get_interpolated_props(T_k, air_table)
-        base_fluid.update(props)
+        base_fluid.update(get_interpolated_props(T_k, air_table))
     elif fluid_id == 'water':
-        props = get_interpolated_props(T_k, water_table)
-        base_fluid.update(props)
+        base_fluid.update(get_interpolated_props(T_k, water_table))
     return base_fluid
 
+# --- Calculation Logic --- 
 def calculate(state):
     steps = []
     warnings = []
@@ -67,45 +143,72 @@ def calculate(state):
 
     hotMdot = state['hotMdot']
     coldMdot = state['coldMdot']
-    hotOutletT = state['hotInletT'] - 10 # dummy initial
-    coldOutletT = state['coldInletT'] + 10
+    hotOutletT = state['hotTargetOutletT']
+    coldOutletT = state['coldTargetOutletT']
+    q = 0
 
-    q = state['targetHeatDuty']
-    hotOutletT = state['hotInletT'] - (q / (hotMdot * evaluate_fluid_props(state['hotFluidId'], state['hotInletT'])['cp']))
-    coldOutletT = state['coldInletT'] + (q / (coldMdot * evaluate_fluid_props(state['coldFluidId'], state['coldInletT'])['cp']))
-
-    T_hot_mean = (state['hotInletT'] + hotOutletT) / 2
-    T_cold_mean = (state['coldInletT'] + coldOutletT) / 2
+    steps.append("## 1. Inicialização e Balanceamento Térmico")
     
-    hotF = evaluate_fluid_props(state['hotFluidId'], T_hot_mean)
-    coldF = evaluate_fluid_props(state['coldFluidId'], T_cold_mean)
+    hotF = evaluate_fluid_props(state['hotFluidId'], state['hotInletT'])
+    coldF = evaluate_fluid_props(state['coldFluidId'], state['coldInletT'])
+
+    for iter in range(10):
+        if state['solveTarget'] == 'hot_outlet':
+            q = coldMdot * coldF['cp'] * (coldOutletT - state['coldInletT'])
+            hotOutletT = state['hotInletT'] - (q / (hotMdot * hotF['cp']))
+        elif state['solveTarget'] == 'cold_outlet':
+            q = hotMdot * hotF['cp'] * (state['hotInletT'] - hotOutletT)
+            coldOutletT = state['coldInletT'] + (q / (coldMdot * coldF['cp']))
+        elif state['solveTarget'] == 'cold_mdot':
+            q = hotMdot * hotF['cp'] * (state['hotInletT'] - hotOutletT)
+            cp_dt = coldF['cp'] * (coldOutletT - state['coldInletT'])
+            coldMdot = q / cp_dt if cp_dt != 0 else 0.001
+        elif state['solveTarget'] == 'hot_mdot':
+            q = coldMdot * coldF['cp'] * (coldOutletT - state['coldInletT'])
+            cp_dt = hotF['cp'] * (state['hotInletT'] - hotOutletT)
+            hotMdot = q / cp_dt if cp_dt != 0 else 0.001
+        elif state['solveTarget'] == 'heat_duty':
+            q = state['targetHeatDuty']
+            hotOutletT = state['hotInletT'] - (q / (hotMdot * hotF['cp']))
+            coldOutletT = state['coldInletT'] + (q / (coldMdot * coldF['cp']))
+
+        T_hot_mean = (state['hotInletT'] + hotOutletT) / 2
+        T_cold_mean = (state['coldInletT'] + coldOutletT) / 2
+        
+        hotF = evaluate_fluid_props(state['hotFluidId'], T_hot_mean)
+        coldF = evaluate_fluid_props(state['coldFluidId'], T_cold_mean)
 
     dT1 = state['hotInletT'] - coldOutletT
     dT2 = hotOutletT - state['coldInletT']
     
-    lmtd = 1
+    lmtd = max(dT1, dT2, 1)
     if abs(dT1 - dT2) > 0.01 and dT1 > 0 and dT2 > 0:
         lmtd = (dT1 - dT2) / math.log(dT1 / dT2)
-    else:
-        lmtd = max(dT1, dT2, 1)
 
     F = 1.0
-    if state['geometryType'] == 'cross-flow-bank' or state['geometryType'] == 'shell-tube':
-        R = abs((state['hotInletT'] - hotOutletT) / (coldOutletT - state['coldInletT']))
-        P = abs((coldOutletT - state['coldInletT']) / (state['hotInletT'] - state['coldInletT']))
+    if state['geometryType'] in ['cross-flow-bank', 'shell-tube']:
+        R = abs((state['hotInletT'] - hotOutletT) / (coldOutletT - state['coldInletT'])) if coldOutletT != state['coldInletT'] else 1.0
+        P = abs((coldOutletT - state['coldInletT']) / (state['hotInletT'] - state['coldInletT'])) if state['hotInletT'] != state['coldInletT'] else 0.0
+        
         if R != 1 and P > 0 and P < 1:
-            num = math.sqrt(R*R + 1) * math.log((1 - P) / (1 - P*R))
-            denInner = (2 - P*(R + 1 - math.sqrt(R*R + 1))) / (2 - P*(R + 1 + math.sqrt(R*R + 1)))
-            F_calc = num / ((R - 1) * math.log(denInner))
-            if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+            try:
+                num = math.sqrt(R*R + 1) * math.log((1 - P) / (1 - P*R))
+                denInner = (2 - P*(R + 1 - math.sqrt(R*R + 1))) / (2 - P*(R + 1 + math.sqrt(R*R + 1)))
+                F_calc = num / ((R - 1) * math.log(denInner))
+                if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+            except: pass
         elif R == 1 and P > 0 and P < 1:
-            num = (P / (1 - P)) * math.sqrt(2)
-            denInner = (2 - P*(2 - math.sqrt(2))) / (2 - P*(2 + math.sqrt(2)))
-            F_calc = num / math.log(denInner)
-            if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+            try:
+                num = (P / (1 - P)) * math.sqrt(2)
+                denInner = (2 - P*(2 - math.sqrt(2))) / (2 - P*(2 + math.sqrt(2)))
+                F_calc = num / math.log(denInner)
+                if not math.isnan(F_calc) and F_calc > 0.4: F = F_calc
+            except: pass
             
         if F < 0.75:
             warnings.append(f"Aviso de Baixa Eficiência Térmica (F = {F:.2f}).")
+
+    if math.isnan(lmtd) or lmtd <= 0: lmtd = 1
 
     Do = state['tubeDo'] / 1000
     t = state['tubeThickness'] / 1000
@@ -115,7 +218,8 @@ def calculate(state):
     Nt = 20
     U, v_t, v_s, Re_t, Re_s, h_i, h_o = 500, 0, 0, 0, 0, 1000, 1000
 
-    coldF_surface = evaluate_fluid_props(state['coldFluidId'], (T_hot_mean + T_cold_mean) / 2)
+    T_surface = ((state['hotInletT'] + hotOutletT)/2 + (state['coldInletT'] + coldOutletT)/2) / 2
+    coldF_surface = evaluate_fluid_props(state['coldFluidId'], T_surface)
     w_effective = state['shellDo']
 
     for i in range(20):
@@ -144,44 +248,43 @@ def calculate(state):
         else:
             A_cross_t = (Nt / state.get('tubePasses', 1)) * math.pi * (Di**2) / 4
             
-        v_t = hotMdot / (hotF['density'] * A_cross_t)
+        v_t = hotMdot / (hotF['density'] * max(A_cross_t, 1e-6))
         Re_t = abs(hotF['density'] * v_t * Di / hotF['mu'])
         
         Nu_t = 4.36
         if Re_t >= 10000:
             Nu_t = 0.023 * (Re_t**0.8) * (hotF['prandtl']**0.3)
         elif Re_t > 2300:
-            f_pet = (0.79 * math.log(Re_t) - 1.64)**(-2)
+            f_pet = (0.79 * math.log(max(Re_t, 2)) - 1.64)**(-2)
             Nu_t = ((f_pet / 8) * (Re_t - 1000) * hotF['prandtl']) / (1 + 12.7 * (f_pet / 8)**0.5 * (hotF['prandtl']**(2/3) - 1))
             
         h_i = Nu_t * hotF['k'] / Di
         
-        # Escoamento externo
         As = 0
         if state['geometryType'] == 'shell-tube':
-            As = (Pt - Do) * state['shellDo'] * state['baffleSpacing'] / Pt
-            v_s = coldMdot / (coldF['density'] * As)
+            As = (Pt - Do) * state['shellDo'] * state.get('baffleSpacing', 0.5) / Pt
+            v_s = coldMdot / (coldF['density'] * max(As, 1e-6))
             D_eq = (4 * ((Pt**2) - (math.pi * (Do**2) / 4))) / (math.pi * Do)
             Re_s = abs(coldF['density'] * v_s * D_eq / coldF['mu'])
-            Nu_s = 0.36 * (Re_s**0.55) * (coldF['prandtl']**0.33)
+            Nu_s = 0.36 * (max(Re_s, 1)**0.55) * (coldF['prandtl']**0.33)
             h_o = Nu_s * coldF['k'] / D_eq
         else:
             w = w_effective
             ST = Pt
             SL = state.get('tubePitchLongitudinal', 25) / 1000
             v_app = coldMdot / (coldF['density'] * w * state['tubeLength'])
-            v_max = v_app * (ST / (ST - Do))
+            v_max = v_app * (ST / max((ST - Do), 1e-6))
             
-            if state['bundleAlignment'] == 'staggered':
+            if state.get('bundleAlignment', 'staggered') == 'staggered':
                 SD = math.sqrt((ST/2)**2 + SL**2)
                 if 2 * (SD - Do) < (ST - Do):
-                    v_max = v_app * (ST / (2 * (SD - Do)))
+                    v_max = v_app * (ST / max(2 * (SD - Do), 1e-6))
             
             v_s = v_max
             Re_s = abs(coldF['density'] * v_s * Do / coldF['mu'])
             
             C, m = 0, 0
-            if state['bundleAlignment'] == 'aligned':
+            if state.get('bundleAlignment', 'staggered') == 'aligned':
                 if Re_s < 100: C, m = 0.80, 0.40
                 elif Re_s < 1000: C, m = 0.22, 0.63
                 elif Re_s < 200000: C, m = 0.27, 0.63
@@ -192,12 +295,12 @@ def calculate(state):
                 elif Re_s < 200000: C, m = 0.35 * ((ST/max(SL, 0.001))**0.2), 0.60
                 else: C, m = 0.022, 0.84
             
-            Nu_s = C * (Re_s**m) * (coldF['prandtl']**0.36) * ((coldF['prandtl'] / coldF_surface['prandtl'])**0.25)
+            Nu_s = C * (max(Re_s, 1)**m) * (coldF['prandtl']**0.36) * ((coldF['prandtl'] / coldF_surface['prandtl'])**0.25)
             h_o = Nu_s * coldF['k'] / Do
 
         R_wall = (Do / (2 * mat['k'])) * math.log(Do / Di)
-        R_fi = state['foulingHot'] * (Do / Di)
-        R_fo = state['foulingCold']
+        R_fi = state.get('foulingHot', 0.0001) * (Do / Di)
+        R_fo = state.get('foulingCold', 0.0002)
         
         U = 1 / ( (1/h_i)*(Do/Di) + R_wall + R_fi + R_fo + (1/h_o) )
         A_req = q / (U * lmtd * F)
@@ -206,87 +309,180 @@ def calculate(state):
         if Nt < 1: Nt = 1
         if Nt > 2000: Nt = 2000
         
+    f_t = (0.79 * math.log(max(Re_t, 2)) - 1.64)**(-2) if Re_t > 2300 else 64/max(Re_t, 1)
+    deltaPTube = f_t * (state['tubeLength'] / Di) * (hotF['density'] * (v_t**2) / 2)
+
+    deltaPShell = 0
+    if state['geometryType'] == 'shell-tube':
+        f_s = 1 if Re_s < 1 else 0.4
+        D_eq = 4 * ((Pt**2) - math.pi * (Do**2)/4) / (math.pi * Do)
+        numBaffles = math.floor(state['tubeLength'] / state.get('baffleSpacing', 0.5))
+        deltaPShell = f_s * (state['shellDo'] / D_eq) * (numBaffles + 1) * (coldF['density'] * (v_s**2) / 2)
+    else:
+        f_s = 1.0
+        N_T_final = max(math.floor(w_effective / Pt), 1)
+        N_L = math.ceil(Nt / N_T_final)
+        deltaPShell = N_L * f_s * (coldF['density'] * (v_s**2) / 2)
+        
+    if hotF['density'] > 500 and v_t < 1.0:
+        warnings.append(f"Velocidade muito baixa lado tubos ({v_t:.2f} m/s).")
+
+    steps.append(f"- Coeficiente Global U = {U:.2f}")
+
     return {
         'U': U, 'Area': Nt * math.pi * Do * state['tubeLength'],
         'Nt': Nt, 'v_t': v_t, 'v_s': v_s, 'h_i': h_i, 'h_o': h_o,
-        'warnings': warnings
+        'warnings': warnings,
+        'q': q, 'lmtd': lmtd, 'F': F, 'hotOutletT': hotOutletT, 'coldOutletT': coldOutletT,
+        'Re_t': Re_t, 'Re_s': Re_s, 'deltaPTube': deltaPTube, 'deltaPShell': deltaPShell,
+        'steps': steps
     }
 
-st.title("Simulador de Trocador de Calor Térmico")
+
+# --- UI ---
+st.title("🔥 ThermoX - Trocador de Calor")
 
 tab1, tab2, tab3, tab4 = st.tabs(["Setup", "Cálculos Analíticos", "Desenho 2D", "Scripts CFD/CAD"])
 
 with tab1:
-    st.header("Parâmetros do Problema")
-    col1, col2 = st.columns(2)
-    with col1:
-        q = st.number_input("Carga Térmica (W)", value=417000)
-        hot_fluid = st.selectbox("Fluido Quente", ['water', 'air', 'oil', 'ethylene'], index=0)
-        T_hot_in = st.number_input("T Quente Entrada (°C)", value=90.0)
-        M_hot = st.number_input("Vazão Quente (kg/s)", value=5.0)
+    st.markdown("### 🧮 Balanço Térmico (Variável Desconhecida / Alvo)")
+    
+    col_bal_1, col_bal_2 = st.columns(2)
+    with col_bal_1:
+        solve_target = st.selectbox("Calcular:", [
+            ('heat_duty', "Definir Fluxo de Calor (Calcular Ambas Saídas)"),
+            ('hot_outlet', "Calcular Temperatura de Saída (Quente/Tubo)"),
+            ('cold_outlet', "Calcular Temperatura de Saída (Frio/Casco)"),
+            ('hot_mdot', "Calcular Vazão Mássica Necessária (Quente)"),
+            ('cold_mdot', "Calcular Vazão Mássica Necessária (Frio)"),
+        ], format_func=lambda x: x[1])[0]
+    with col_bal_2:
+        heat_duty = st.number_input("Fluxo de Calor Desejado (kW)", value=417.0, disabled=(solve_target != 'heat_duty'))
 
-    with col2:
-        cold_fluid = st.selectbox("Fluido Frio", ['water', 'air', 'oil', 'ethylene'], index=0)
-        T_cold_in = st.number_input("T Frio Entrada (°C)", value=25.0)
-        M_cold = st.number_input("Vazão Frio (kg/s)", value=10.0)
+    st.markdown("---")
 
-    st.header("Geometria")
-    col3, col4 = st.columns(2)
-    with col3:
-        geom_type = st.selectbox("Tipo de Trocador", ['cross-flow-bank', 'shell-tube'])
-        alignment = st.selectbox("Alinhamento", ['staggered', 'aligned'])
-    with col4:
-        length = st.number_input("Comprimento do Tubo (m)", value=3.0)
-        shell_do = st.number_input("Largura do Duto (m)", value=0.6)
+    col_hot, col_cold = st.columns(2)
+    fluid_opts = [('water', 'Água Líquida'), ('air', 'Ar (Gás Ideial)'), ('oil', 'Óleo Motor'), ('ethylene', 'Etilenoglicol')]
+
+    with col_hot:
+        st.markdown("### 🌡️ Fluido Quente (Tubos)")
+        hot_fluid = st.selectbox("Tipo de Fluido Quente", fluid_opts, format_func=lambda x: x[1])[0]
+        hot_inlet_t = st.number_input("Temp. Entrada Quente (°C)", value=90.0)
+        hot_mdot = st.number_input("Vazão Mássica Quente (kg/s)", value=5.0, disabled=(solve_target == 'hot_mdot'))
+        hot_target_outlet_t = st.number_input("Temp. Saída Quente (°C) (Alvo)", value=70.0, disabled=(solve_target in ['hot_outlet', 'heat_duty']))
+
+    with col_cold:
+        st.markdown("### 💧 Fluido Frio (Casco)")
+        cold_fluid = st.selectbox("Tipo de Fluido Frio", fluid_opts, format_func=lambda x: x[1])[0]
+        cold_inlet_t = st.number_input("Temp. Entrada Fria (°C)", value=25.0)
+        cold_mdot = st.number_input("Vazão Mássica Fria (kg/s)", value=10.0, disabled=(solve_target == 'cold_mdot'))
+        cold_target_outlet_t = st.number_input("Temp. Saída Fria (°C) (Alvo)", value=35.0, disabled=(solve_target in ['cold_outlet', 'heat_duty']))
+
+    st.markdown("---")
+
+    col_geom, col_foul = st.columns(2)
+    with col_geom:
+        st.markdown("### 📦 Geometria Externa & Tubos")
+        geom_type = st.selectbox("Tipo de Trocador", [('shell-tube', 'Casco e Tubos'), ('cross-flow-bank', 'Banco de Tubos')], format_func=lambda x: x[1])[0]
+        material = st.selectbox("Material de Construção", [('copper', 'Cobre'), ('aluminum', 'Alumínio'), ('steel', 'Aço Carbono'), ('ss304', 'Inox 304')], format_func=lambda x: x[1])[0]
+        
+        row1_g1, row1_g2 = st.columns(2)
+        with row1_g1:
+            shell_do = st.number_input("Diâmetro / Largura (m)", value=0.6)
+        with row1_g2:
+            baffle_spacing = st.number_input("Espaç. Chicanas (m)", value=0.5, disabled=(geom_type != 'shell-tube'))
+
+        row2_g1, row2_g2, row2_g3 = st.columns(3)
+        with row2_g1:
+            tube_do = st.number_input("Ø Ext. Tubo(mm)", value=19.05)
+        with row2_g2:
+            tube_thickness = st.number_input("Espessura (mm)", value=1.65)
+        with row2_g3:
+            tube_length = st.number_input("Comp. (m)", value=3.0)
+
+        row3_g1, row3_g2, row3_g3 = st.columns(3)
+        with row3_g1:
+            tube_pitch = st.number_input("Passo (mm)", value=25.4)
+            bundle_alignment = st.selectbox("Arranjo", [('aligned', 'Alinhado'), ('staggered', 'Desalinhado')], format_func=lambda x: x[1], disabled=(geom_type == 'shell-tube'))[0]
+        with row3_g2:
+            tube_passes = st.number_input("Passes Tubo (N)", value=2, disabled=(geom_type != 'shell-tube'))
+        with row3_g3:
+            tube_pitch_longitudinal = st.number_input("P. Long. (SL) mm", value=25.4, disabled=(geom_type == 'shell-tube'))
+
+    with col_foul:
+        st.markdown("### ⚙️ Fator de Encrustração (Fouling)")
+        fouling_hot = st.number_input("Fator Quente (m².K/W)", value=0.0001, format="%.4f")
+        fouling_cold = st.number_input("Fator Frio (m².K/W)", value=0.0002, format="%.4f")
 
 with tab2:
-    if st.button("Simular"):
+    if st.button("Executar Simulação"):
         state = {
-            'solveTarget': 'heat_duty',
-            'targetHeatDuty': q,
+            'solveTarget': solve_target,
+            'targetHeatDuty': heat_duty * 1000,
             'hotFluidId': hot_fluid,
             'coldFluidId': cold_fluid,
-            'hotInletT': T_hot_in,
-            'hotMdot': M_hot,
-            'coldInletT': T_cold_in,
-            'coldMdot': M_cold,
-            'materialId': 'copper',
+            'hotInletT': hot_inlet_t,
+            'hotMdot': hot_mdot,
+            'hotTargetOutletT': hot_target_outlet_t,
+            'coldInletT': cold_inlet_t,
+            'coldMdot': cold_mdot,
+            'coldTargetOutletT': cold_target_outlet_t,
+            'materialId': material,
             'geometryType': geom_type,
-            'bundleAlignment': alignment,
-            'tubeLength': length,
+            'bundleAlignment': bundle_alignment,
+            'tubeLength': tube_length,
             'shellDo': shell_do,
-            'tubeDo': 19.05,
-            'tubeThickness': 1.65,
-            'tubePitch': 25.4,
-            'foulingHot': 0.0001,
-            'foulingCold': 0.0002
+            'baffleSpacing': baffle_spacing,
+            'tubeDo': tube_do,
+            'tubeThickness': tube_thickness,
+            'tubePitch': tube_pitch,
+            'tubePitchLongitudinal': tube_pitch_longitudinal,
+            'tubePasses': tube_passes,
+            'foulingHot': fouling_hot,
+            'foulingCold': fouling_cold
         }
         
-        res = calculate(state)
-        
-        st.write("### Resultados")
-        col_res1, col_res2, col_res3 = st.columns(3)
-        col_res1.metric("Coeficiente Global U (W/m²K)", f"{res['U']:.2f}")
-        col_res2.metric("Área Requerida (m²)", f"{res['Area']:.2f}")
-        col_res3.metric("Número de Tubos Total", res['Nt'])
-        
-        col_res4, col_res5, col_res6 = st.columns(3)
-        col_res4.metric("Vel. Interna (m/s)", f"{res['v_t']:.3f}")
-        col_res5.metric("Vel. Externa Máx. (m/s)", f"{res['v_s']:.3f}")
-        col_res6.metric("Coef. Interno h_i", f"{res['h_i']:.1f}")
+        try:
+            res = calculate(state)
+            
+            if res['warnings']:
+                for w in res['warnings']:
+                    st.error(w)
 
-        if res['warnings']:
-            st.warning("Avisos:")
-            for w in res['warnings']:
-                st.write(f"- {w}")
+            st.write("### 📈 Desempenho Termodinâmico")
+            col_res1, col_res2, col_res3, col_res4, col_res5, col_res6 = st.columns(6)
+            col_res1.metric("Calor Troc. (kW)", f"{(res['q']/1000):.2f}")
+            col_res2.metric("LMTD (°C)", f"{res['lmtd']:.2f}")
+            col_res3.metric("Fator F", f"{res['F']:.2f}")
+            col_res4.metric("T Saída Q.", f"{res['hotOutletT']:.2f}")
+            col_res5.metric("T Saída F.", f"{res['coldOutletT']:.2f}")
+            col_res6.metric("U Global", f"{res['U']:.1f}")
+            
+            st.write("### 📐 Dimensionamento da Geometria")
+            col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+            col_g1.metric("Área Necess. (m²)", f"{res['Area']:.2f}")
+            col_g2.metric("Nº Tubos", res['Nt'])
+            col_g3.metric("Vel. Tubos (m/s)", f"{res['v_t']:.3f}")
+            col_g4.metric("Vel. Casco (m/s)", f"{res['v_s']:.3f}")
+
+            st.write("### 🔬 Fenômenos de Transporte")
+            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            col_f1.metric("Reynolds Tubos", f"{res['Re_t']:.0f}")
+            col_f2.metric("Reynolds Casco", f"{res['Re_s']:.0f}")
+            col_f3.metric("ΔP Tubos (kPa)", f"{(res['deltaPTube']/1000):.2f}")
+            col_f4.metric("ΔP Casco (kPa)", f"{(res['deltaPShell']/1000):.2f}")
+
+            with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
+                st.markdown("\n".join(res['steps']))
+        except Exception as e:
+            st.error(f"Erro no cálculo: {e}")
     else:
-        st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Simular'.")
+        st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Executar Simulação'.")
 
 with tab3:
-    st.write("### Vista 2D do Trocador Frontal")
-    st.info("Os recursos de desenho 2D estarão disponíveis nesta aba.")
+    st.write("### Vista 2D da Geometria")
+    st.info("A implementação do desenho com matplotlib ou canvas seria gerada aqui baseado no arranjo e Nt.")
 
 with tab4:
-    st.write("### Scripts para CFD")
-    st.code("# Exemplo de script de geração de malha no Fluent\n/define/models/energy yes\n/define/materials/change-create fluid fluid water-liquid ...\n", language='bash')
-
+    st.write("### Scripts Sugeridos para OpenFOAM / Fluent CFD")
+    st.info("Scripts para geração de malha estruturada com BlockMesh e SnappyHexMesh seriam gerados aqui.")
