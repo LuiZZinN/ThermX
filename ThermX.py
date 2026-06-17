@@ -95,8 +95,50 @@ input {
 div[data-baseweb="popover"] {
     background-color: #1e293b !important;
 }
+[data-testid="stExpanderDetails"] {
+    background-color: #0f172a;
+    border-radius: 8px;
+    padding: 10px;
+}
+[data-testid="stExpanderDetails"] p, 
+[data-testid="stExpanderDetails"] li {
+    color: #cbd5e1 !important;
+}
+[data-testid="stExpanderDetails"] strong, [data-testid="stExpanderDetails"] b {
+    color: #38bdf8 !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+# Define dictionaries for options
+targ_opts = {
+    'heat_duty': "Definir Fluxo de Calor (Calcular Ambas Saídas)",
+    'hot_outlet': "Calcular Temperatura de Saída (Quente/Tubo)",
+    'cold_outlet': "Calcular Temperatura de Saída (Frio/Casco)",
+    'hot_mdot': "Calcular Vazão Mássica Necessária (Quente)",
+    'cold_mdot': "Calcular Vazão Mássica Necessária (Frio)",
+}
+fluid_opts = {
+    'water': 'Água Líquida',
+    'air': 'Ar (Gás Ideal)',
+    'engine_oil': 'Óleo Motor',
+    'ethylene_glycol': 'Etilenoglicol (100%)'
+}
+geom_opts = {
+    'shell-tube': 'Casco e Tubos',
+    'cross-flow-bank': 'Banco de Tubos'
+}
+mat_opts = {
+    'copper': 'Cobre',
+    'aluminum': 'Alumínio',
+    'steel': 'Aço Carbono',
+    'ss304': 'Inox 304'
+}
+arr_opts = {
+    'aligned': 'Alinhado',
+    'staggered': 'Desalinhado'
+}
+
 
 FLUIDS = {
     'water': {'name': 'Água Líquida', 'density': 998, 'cp': 4182, 'k': 0.6, 'mu': 0.001002, 'prandtl': 6.99},
@@ -614,31 +656,24 @@ with tab1:
     
     col_bal_1, col_bal_2 = st.columns(2)
     with col_bal_1:
-        st.selectbox("Calcular:", [
-            ('heat_duty', "Definir Fluxo de Calor (Calcular Ambas Saídas)"),
-            ('hot_outlet', "Calcular Temperatura de Saída (Quente/Tubo)"),
-            ('cold_outlet', "Calcular Temperatura de Saída (Frio/Casco)"),
-            ('hot_mdot', "Calcular Vazão Mássica Necessária (Quente)"),
-            ('cold_mdot', "Calcular Vazão Mássica Necessária (Frio)"),
-        ], format_func=lambda x: x[1], key='s_targ', on_change=update_calc)
+        st.selectbox("Calcular:", list(targ_opts.keys()), format_func=lambda x: targ_opts[x], key='s_targ', on_change=update_calc)
     with col_bal_2:
         st.number_input("Fluxo de Calor Desejado (kW)", key='s_heat_duty', disabled=(st.session_state.s_targ != 'heat_duty'), on_change=update_calc)
 
     st.markdown("---")
 
     col_hot, col_cold = st.columns(2)
-    fluid_opts = [('water', 'Água Líquida'), ('air', 'Ar (Gás Ideial)'), ('oil', 'Óleo Motor'), ('ethylene', 'Etilenoglicol')]
 
     with col_hot:
         st.markdown("### 🌡️ Fluido Quente (Tubos)")
-        st.selectbox("Tipo de Fluido Quente", fluid_opts, format_func=lambda x: x[1], key='s_h_fluid', on_change=update_calc)
+        st.selectbox("Tipo de Fluido Quente", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_h_fluid', on_change=update_calc)
         st.number_input("Temp. Entrada Quente (°C)", key='s_h_in', on_change=update_calc)
         st.number_input("Vazão Mássica Quente (kg/s)", key='s_h_mdot', disabled=(st.session_state.s_targ == 'hot_mdot'), on_change=update_calc)
         st.number_input("Temp. Saída Quente (°C) (Alvo/Calculado)", key='s_h_out', disabled=(st.session_state.s_targ in ['hot_outlet', 'heat_duty']), on_change=update_calc)
 
     with col_cold:
         st.markdown("### 💧 Fluido Frio (Casco)")
-        st.selectbox("Tipo de Fluido Frio", fluid_opts, format_func=lambda x: x[1], key='s_c_fluid', on_change=update_calc)
+        st.selectbox("Tipo de Fluido Frio", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_c_fluid', on_change=update_calc)
         st.number_input("Temp. Entrada Fria (°C)", key='s_c_in', on_change=update_calc)
         st.number_input("Vazão Mássica Fria (kg/s)", key='s_c_mdot', disabled=(st.session_state.s_targ == 'cold_mdot'), on_change=update_calc)
         st.number_input("Temp. Saída Fria (°C) (Alvo/Calculado)", key='s_c_out', disabled=(st.session_state.s_targ in ['cold_outlet', 'heat_duty']), on_change=update_calc)
@@ -648,27 +683,27 @@ with tab1:
     col_geom, col_foul = st.columns(2)
     with col_geom:
         st.markdown("### 📦 Geometria Externa & Tubos")
-        st.selectbox("Tipo de Trocador", [('shell-tube', 'Casco e Tubos'), ('cross-flow-bank', 'Banco de Tubos')], format_func=lambda x: x[1], key='s_g_type', on_change=update_calc)
-        st.selectbox("Material de Construção", [('copper', 'Cobre'), ('aluminum', 'Alumínio'), ('steel', 'Aço Carbono'), ('ss304', 'Inox 304')], format_func=lambda x: x[1], key='s_mat', on_change=update_calc)
+        st.selectbox("Tipo de Trocador", list(geom_opts.keys()), format_func=lambda x: geom_opts[x], key='s_g_type', on_change=update_calc)
+        st.selectbox("Material de Construção", list(mat_opts.keys()), format_func=lambda x: mat_opts[x], key='s_mat', on_change=update_calc)
         
         row1_g1, row1_g2 = st.columns(2)
         with row1_g1:
-            st.number_input("Diâmetro / Largura (m)", key='s_do', on_change=update_calc)
+            st.number_input("Diâmetro / Largura (m)", key='s_do', step=0.01, format="%.3f", on_change=update_calc)
         with row1_g2:
-            st.number_input("Espaç. Chicanas (m)", key='s_baffle', disabled=(st.session_state.s_g_type != 'shell-tube'), on_change=update_calc)
+            st.number_input("Espaç. Chicanas (m)", key='s_baffle', disabled=(st.session_state.s_g_type != 'shell-tube'), step=0.01, format="%.3f", on_change=update_calc)
 
         row2_g1, row2_g2, row2_g3 = st.columns(3)
         with row2_g1:
-            st.number_input("Ø Ext. Tubo(mm)", key='s_t_do', on_change=update_calc)
+            st.number_input("Ø Ext. Tubo(mm)", key='s_t_do', step=0.1, format="%.2f", on_change=update_calc)
         with row2_g2:
-            st.number_input("Espessura (mm)", key='s_t_th', on_change=update_calc)
+            st.number_input("Espessura (mm)", key='s_t_th', step=0.1, format="%.2f", on_change=update_calc)
         with row2_g3:
-            st.number_input("Comp. (m)", key='s_length', on_change=update_calc)
+            st.number_input("Comp. (m)", key='s_length', step=0.1, format="%.2f", on_change=update_calc)
 
         row3_g1, row3_g2, row3_g3 = st.columns(3)
         with row3_g1:
-            st.number_input("Passo (mm)", key='s_t_pitch', on_change=update_calc)
-            st.selectbox("Arranjo", [('aligned', 'Alinhado'), ('staggered', 'Desalinhado')], format_func=lambda x: x[1], key='s_arr', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
+            st.number_input("Passo (mm)", key='s_t_pitch', step=0.1, format="%.2f", on_change=update_calc)
+            st.selectbox("Arranjo", list(arr_opts.keys()), format_func=lambda x: arr_opts[x], key='s_arr', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
         with row3_g2:
             st.number_input("Passes Tubo (N)", key='s_t_passes', disabled=(st.session_state.s_g_type != 'shell-tube'), on_change=update_calc)
         with row3_g3:
