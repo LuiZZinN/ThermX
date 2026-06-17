@@ -74,6 +74,10 @@ hr {
     border-color: #1e293b;
 }
 
+[data-testid="stWidgetLabel"] p, label p {
+    color: #f8fafc !important;
+}
+
 /* Force light text in Expander contents */
 [data-testid="stExpanderDetails"] p, 
 [data-testid="stExpanderDetails"] li, 
@@ -105,6 +109,20 @@ div[data-baseweb="popover"] {
     color: #cbd5e1 !important;
 }
 [data-testid="stExpanderDetails"] strong, [data-testid="stExpanderDetails"] b {
+    color: #38bdf8 !important;
+}
+button[data-baseweb="tab"] {
+    background-color: transparent !important;
+}
+button[data-baseweb="tab"] p {
+    color: #f8fafc !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    border-bottom: 2px solid #38bdf8 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] p {
     color: #38bdf8 !important;
 }
 </style>
@@ -218,6 +236,9 @@ def calculate(state):
     hotOutletT = state['hotTargetOutletT']
     coldOutletT = state['coldTargetOutletT']
     q = 0
+
+    hotF = evaluate_fluid_props(state['hotFluidId'], state['hotInletT'])
+    coldF = evaluate_fluid_props(state['coldFluidId'], state['coldInletT'])
 
     for iter in range(10):
         if state['solveTarget'] == 'hot_outlet':
@@ -643,7 +664,10 @@ def update_calc():
         st.session_state['res'] = res
         st.session_state['state'] = state
     except Exception as e:
-        pass
+        import traceback
+        st.error(f"Error in update_calc: {e}")
+        st.error(traceback.format_exc())
+
 
 # Force initial calc if none exists
 if 'res' not in st.session_state:
