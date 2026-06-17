@@ -858,26 +858,21 @@ with tab3:
                 <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
             </linearGradient>
         </defs>
-        
         <!-- Cylinder / Core Body -->
         <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
         <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
-        
         <!-- Hot Fluid In (Red) - Tubes -->
         <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
         <polygon points="100,195 110,200 100,205" fill="#f97316"/>
         <text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
-        
         <!-- Hot Fluid Out -->
         <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
         <polygon points="380,195 390,200 380,205" fill="#f97316"/>
         <text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
-        
         <!-- Cold Fluid In (Blue) - Shell/Bank -->
         <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
         <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
         <text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
-
         <!-- Cold Fluid Out -->
         <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
         <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
@@ -932,7 +927,6 @@ with tab4:
             stt['simType'] = 'transient' if sim_type == 'Transiente' else 'steady'
             stt['turbModel'] = 'k-epsilon' if turb_model == 'k-epsilon Standard' else 'k-omega'
             stt['yPlusTarget'] = y_plus
-            stt['iterSteady'] = iter_total
             stt['residualsTarget'] = res_target
             
             # Recalcula Y+ scripts rapidinhos sem precisar ir pro backend pesado
