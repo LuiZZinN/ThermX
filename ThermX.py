@@ -111,18 +111,15 @@ div[data-baseweb="popover"] {
 [data-testid="stExpanderDetails"] strong, [data-testid="stExpanderDetails"] b {
     color: #38bdf8 !important;
 }
-button[data-baseweb="tab"] {
+.stTabs button {
     background-color: transparent !important;
 }
-button[data-baseweb="tab"] p {
+.stTabs button p, .stTabs button span {
     color: #f8fafc !important;
     font-weight: 600 !important;
     font-size: 16px !important;
 }
-button[data-baseweb="tab"][aria-selected="true"] {
-    border-bottom: 2px solid #38bdf8 !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] p {
+.stTabs button[aria-selected="true"] p, .stTabs button[aria-selected="true"] span {
     color: #38bdf8 !important;
 }
 </style>
@@ -772,7 +769,7 @@ with tab2:
         with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
             st.markdown("\n\n".join(res['steps']))
     else:
-        st.info("Ajuste os parâmetros na aba 'Setup' e clique em 'Executar Simulação'.")
+        st.info("Os resultados da simulação em tempo real aparecerão aqui caso haja dados válidos no Setup.")
 
 with tab3:
     st.write("### Modelos da Geometria (2D e Isométrico)")
@@ -838,59 +835,55 @@ with tab3:
                             if count >= n_tubes: break
                     if count >= n_tubes: break
 
-            svg_content = f'''
-            <div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-                <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
-                    {"".join(svg_elements)}
-                </svg>
-            </div>
-            '''
+            svg_content = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
+    <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+        {"".join(svg_elements)}
+    </svg>
+</div>'''
             st.markdown(svg_content, unsafe_allow_html=True)
             
         with col_t3_2:
             st.markdown("#### Diagrama Isométrico (Esquemático de Fluxos)")
             
             # Simple Schematic logic
-            schematic_svg = f'''
-            <div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-                <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
-                        </linearGradient>
-                        <linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    
-                    <!-- Cylinder / Core Body -->
-                    <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
-                    <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
-                    
-                    <!-- Hot Fluid In (Red) - Tubes -->
-                    <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
-                    <polygon points="100,195 110,200 100,205" fill="#f97316"/>
-                    <text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
-                    
-                    <!-- Hot Fluid Out -->
-                    <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
-                    <polygon points="380,195 390,200 380,205" fill="#f97316"/>
-                    <text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
-                    
-                    <!-- Cold Fluid In (Blue) - Shell/Bank -->
-                    <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-                    <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
-                    <text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
+            schematic_svg = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
+    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+            </linearGradient>
+        </defs>
+        
+        <!-- Cylinder / Core Body -->
+        <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+        <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+        
+        <!-- Hot Fluid In (Red) - Tubes -->
+        <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
+        <polygon points="100,195 110,200 100,205" fill="#f97316"/>
+        <text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
+        
+        <!-- Hot Fluid Out -->
+        <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
+        <polygon points="380,195 390,200 380,205" fill="#f97316"/>
+        <text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
+        
+        <!-- Cold Fluid In (Blue) - Shell/Bank -->
+        <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+        <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
+        <text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
 
-                    <!-- Cold Fluid Out -->
-                    <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-                    <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
-                    <text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
-                </svg>
-            </div>
-            '''
+        <!-- Cold Fluid Out -->
+        <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+        <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
+        <text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
+    </svg>
+</div>'''
             st.markdown(schematic_svg, unsafe_allow_html=True)
 
         st.markdown("---")
@@ -898,7 +891,7 @@ with tab3:
         st.code(generate_solidworks_macro(stt, rs), language="vbnet")
         
     else:
-         st.info("Execute a simulação primeiro na aba Setup.")
+         st.info("Ajuste os parâmetros iniciais na aba Setup para renderizar a geometria.")
 
 with tab4:
     if 'state' in st.session_state:
@@ -914,7 +907,25 @@ with tab4:
             sim_type = st.radio("Método", ['Permanente (Steady)', 'Transiente'])
             turb_model = st.selectbox("Modelo de Turbulência", ['k-epsilon Standard', 'k-omega SST'])
             y_plus = st.number_input("Valor Y+ Almejado (Camada Limite)", value=35.0, min_value=0.1)
-            iter_total = st.number_input("Iterações Máximas", value=500, min_value=10)
+            
+            if sim_type == 'Permanente (Steady)':
+                iter_total = st.number_input("Iterações Máximas", value=500, min_value=10)
+                stt['iterSteady'] = iter_total
+            else:
+                st.markdown("#### Configurações Transientes")
+                time_steps = st.number_input("Número de Time-Steps", value=100, min_value=1)
+                iter_per_step = st.number_input("Iterações por Time-Step", value=20, min_value=1)
+                # Courant Number based estimation: dt = C * (dx / v). Approximate dx ~ D_eq / 10
+                # Just estimating based on v_max
+                v_max = max(rs['v_t'], rs['v_s'])
+                L_char = (stt['tubeDi']/1000) if stt['solveTarget'] == 'hot_outlet' else (stt['tubeDo']/1000)
+                dt_estimate = L_char / v_max if v_max > 0 else 0.01
+                dt_size = st.number_input("Tamanho do Time-Step (s)", value=float(f"{dt_estimate:.4e}"), format="%.4e")
+                
+                stt['timeSteps'] = time_steps
+                stt['iterPerStep'] = iter_per_step
+                rs['estimatedTimeStep'] = dt_size
+
             res_target = st.number_input("Critérios de Convergência (Resíduos)", value=1e-4, format="%.5f")
             
             # Atualiza objeto state com essas definições locais e recomputa o deltaT
@@ -947,4 +958,4 @@ with tab4:
             render_terminal("2. Fluent Setup & Solver (TUI) - Condições de Contorno", generate_fluent_setup(stt, rs))
             
     else:
-        st.info("Execute a simulação primeiro.")
+        st.info("Ajuste os parâmetros iniciais na aba Setup para gerar os scripts.")
