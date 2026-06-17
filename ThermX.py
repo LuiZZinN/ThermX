@@ -557,25 +557,64 @@ def generate_fluent_meshing(state, results):
 """
 
 def generate_fluent_setup(state, results):
-    turbTui = "/define/models/viscous/ke-standard yes" if state.get('turbModel') == 'k-epsilon' else "/define/models/viscous/kw-sst yes"
     is_transient = state.get('simType') == 'transient'
-    transientTui = f"/define/models/unsteady-2nd-order yes\n/solve/set/time-step {results['estimatedTimeStep']:.4e}\n/solve/dual-time-iterate {state.get('timeSteps', 100)} {state.get('iterPerStep', 20)}" if is_transient else f"/solve/iterate {state.get('iterSteady', 100)}"
-    return f""";; Script ANSYS Fluent Setup & Solve (TUI)
-/file/read-case "TrocadorCalor_Malha.msh"
-/define/models/energy yes
-{turbTui}
+    steady_no = "no" if is_transient else "yes"
+    
+    models_tui = f'''/define/models/steady? {steady_no}
+/define/models/energy? yes no no no no
+/define/models/viscous/{"ke-standard? yes" if state.get('turbModel', 'k-epsilon') == 'k-epsilon' else "kw-sst? yes"}'''
 
-/define/boundary-conditions/mass-flow-inlet tube_inlet yes yes {state['hotMdot']} no {state['hotInletT'] + 273.15}
-/define/boundary-conditions/mass-flow-inlet shell_inlet yes yes {state['coldMdot']} no {state['coldInletT'] + 273.15}
+    hot_mdot = state.get('hotMdot', 2.5)
+    hot_t = state.get('hotInletT', 90.0) + 273.15
+    cold_mdot = state.get('coldMdot', 5.0)
+    cold_t = state.get('coldInletT', 25.0) + 273.15
 
+    bnd_tui = f''';; Tubos (Quente): Mdot = {hot_mdot:.2f} kg/s | T = {hot_t-273.15:.2f} °C ({hot_t:.2f} K)
+/define/boundary-conditions/mass-flow-inlet tube_inlet yes yes {hot_mdot} no {hot_t}
+;; Casco (Frio): Mdot = {cold_mdot:.2f} kg/s | T = {cold_t-273.15:.2f} °C ({cold_t:.2f} K)
+/define/boundary-conditions/mass-flow-inlet shell_inlet yes yes {cold_mdot} no {cold_t}'''
+
+    res_target = state.get('residualsTarget', 1e-4)
+    res_tui = f"/solve/monitors/residual/convergence-criteria {res_target} {res_target} {res_target} {res_target} {res_target} {res_target} 0.000001"
+
+    if is_transient:
+        init_tui = f'''/solve/initialize/hyb-initialization
+/solve/set/time-step {results.get('estimatedTimeStep', 1e-2):.4e}
+
+;; 7. Solução Transiente ({state.get('timeSteps', 100)} passos com max {state.get('iterPerStep', 20)} iterações por passo interno)
+/solve/dual-time-iterate {state.get('timeSteps', 100)} {state.get('iterPerStep', 20)}'''
+    else:
+        init_tui = f'''/solve/initialize/hyb-initialization
+
+;; 7. Solução Permanente ({state.get('iterSteady', 500)} iterações)
+/solve/iterate {state.get('iterSteady', 500)}'''
+
+    return f""";; ====================================================================
+;; Script ANSYS Fluent Setup & Solve (TUI) - Corrigido e Alinhado
+;; ====================================================================
+
+;; 1. Importação Correta da Malha
+/file/read-mesh "TrocadorCalor_Malha.msh"
+
+;; 2. Ativação dos Modelos ({'Transiente' if is_transient else 'Permanente'}, Energia e Turbulência)
+{models_tui}
+
+;; 3. Condições de Contorno (Alinhadas com o Relatório Otimizado)
+{bnd_tui}
+
+;; 4. Criação dos Monitores de Superfície para Validação Térmica
 /solve/monitors/surface/set-monitor "hot-outlet-temp" "mass-avg" "temperature" "tube_outlet" () yes yes "hot_out_t.out"
 /solve/monitors/surface/set-monitor "cold-outlet-temp" "mass-avg" "temperature" "shell_outlet" () yes yes "cold_out_t.out"
 /solve/monitors/surface/set-monitor "total-heat-flux" "integral" "heat-flux" "tube_walls" () yes yes "heat_flux.out"
 
-/solve/monitors/residual/convergence-criteria {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)} {state.get('residualsTarget', 1e-4)}
+;; 5. Critérios de Convergência Restritos (Energia em 1e-6)
+;; Ordem padrão dos resíduos: continuity, x-vel, y-vel, z-vel, k, epsilon, energy
+{res_tui}
 
-/solve/initialize/hyb-initialization
-{transientTui}
+;; 6. Inicialização e Configuração do Solucionador
+{init_tui}
+
+;; 8. Salvar os Resultados Finais
 /file/write-case-data "TrocadorCalor_Resolvido.cas"
 """
 
@@ -836,9 +875,9 @@ with tab3:
                     if count >= n_tubes: break
 
             svg_content = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-    <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
-        {"".join(svg_elements)}
-    </svg>
+<svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+{"".join(svg_elements)}
+</svg>
 </div>'''
             st.markdown(svg_content, unsafe_allow_html=True)
             
@@ -847,37 +886,37 @@ with tab3:
             
             # Simple Schematic logic
             schematic_svg = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-            <linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
-            </linearGradient>
-            <linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
-            </linearGradient>
-        </defs>
-        <!-- Cylinder / Core Body -->
-        <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
-        <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
-        <!-- Hot Fluid In (Red) - Tubes -->
-        <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
-        <polygon points="100,195 110,200 100,205" fill="#f97316"/>
-        <text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
-        <!-- Hot Fluid Out -->
-        <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
-        <polygon points="380,195 390,200 380,205" fill="#f97316"/>
-        <text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
-        <!-- Cold Fluid In (Blue) - Shell/Bank -->
-        <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-        <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
-        <text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
-        <!-- Cold Fluid Out -->
-        <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-        <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
-        <text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
-    </svg>
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+<stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+</linearGradient>
+<linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+<stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+</linearGradient>
+</defs>
+<!-- Cylinder / Core Body -->
+<path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+<path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+<!-- Hot Fluid In (Red) - Tubes -->
+<path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
+<polygon points="100,195 110,200 100,205" fill="#f97316"/>
+<text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
+<!-- Hot Fluid Out -->
+<path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
+<polygon points="380,195 390,200 380,205" fill="#f97316"/>
+<text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
+<!-- Cold Fluid In (Blue) - Shell/Bank -->
+<path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+<polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
+<text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
+<!-- Cold Fluid Out -->
+<path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+<polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
+<text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
+</svg>
 </div>'''
             st.markdown(schematic_svg, unsafe_allow_html=True)
 
