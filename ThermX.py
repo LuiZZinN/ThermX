@@ -1,129 +1,116 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import math
 
-st.set_page_config(layout="wide", page_title="ThermoX", page_icon="🔥", initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide", page_title="Simulador de Trocador de Calor", page_icon="🔥", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
-/* Custom Dark Theme to match React App */
+/* Custom Light Theme overrides */
 [data-testid="stAppViewContainer"] {
-    background-color: #020617;
-    color: #cbd5e1;
+    background-color: #f4f7fb;
     font-family: 'Inter', sans-serif;
 }
 [data-testid="stHeader"] {
-    background-color: #020617;
-}
-header.stAppHeader {
-    border-bottom: 1px solid #1e293b;
+    background-color: transparent;
 }
 
-/* Tabs */
+/* Custom top header */
+.custom-header {
+    background-color: #2b6cb0;
+    color: white;
+    padding: 20px 30px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.custom-header h1 {
+    color: white !important;
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+}
+.custom-header p {
+    color: #e2e8f0;
+    margin: 4px 0 0 0;
+    font-size: 14px;
+}
+
+/* Tabs styling */
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
-    background-color: rgba(15, 23, 42, 0.5);
-    padding: 6px;
-    border-radius: 12px;
-    border: 1px solid #1e293b;
 }
 .stTabs [data-baseweb="tab"] {
     height: 40px;
-    background-color: transparent;
-    border-radius: 8px;
-    color: #94a3b8;
-    border: none;
+    background-color: white;
+    border-radius: 6px 6px 0 0;
+    border: 1px solid #e2e8f0;
+    border-bottom: none;
+    color: #475569;
     padding: 0 20px;
 }
 .stTabs [aria-selected="true"] {
-    background-color: rgba(14, 165, 233, 0.1) !important;
-    color: #38bdf8 !important;
-    border: 1px solid rgba(14, 165, 233, 0.2) !important;
+    background-color: #f4f7fb !important;
+    color: #2b6cb0 !important;
+    border-bottom: 2px solid #2b6cb0 !important;
+    font-weight: bold;
 }
 
 /* Metric Cards */
 [data-testid="stMetric"] {
-    background-color: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
+    background-color: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
     padding: 16px;
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 [data-testid="stMetricLabel"] {
-    color: #94a3b8;
+    color: #64748b;
     font-size: 0.875rem;
+    font-weight: 500;
 }
 [data-testid="stMetricValue"] {
-    color: #f8fafc;
+    color: #1e293b;
     font-size: 1.5rem;
-    font-family: monospace;
 }
 
-h2, h3 {
-    color: #f8fafc !important;
-}
-
-[data-testid="stMetricValue"] div {
-    color: #f8fafc !important;
-}
-
-[data-testid="stMetricLabel"] p {
-    color: #94a3b8 !important;
+h2, h3, h4 {
+    color: #1e293b !important;
 }
 
 hr {
-    border-color: #1e293b;
+    border-color: #e2e8f0;
 }
 
-[data-testid="stWidgetLabel"] p, label p {
-    color: #f8fafc !important;
+/* Sidebar styling to look like the image */
+[data-testid="stSidebar"] {
+    background-color: white !important;
+    border-right: 1px solid #e2e8f0;
+}
+.sidebar-header {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.execute-btn button {
+    background-color: #ef4444 !important;
+    color: white !important;
+    border-radius: 6px !important;
+    border: none !important;
+    font-weight: bold !important;
+    margin-top: 15px !important;
+}
+.execute-btn button:hover {
+    background-color: #dc2626 !important;
 }
 
-/* Force light text in Expander contents */
-[data-testid="stExpanderDetails"] p, 
-[data-testid="stExpanderDetails"] li, 
-[data-testid="stExpanderDetails"] span {
-    color: #e2e8f0 !important;
-}
-
-/* Form Inputs Contrast Fixes */
-div[data-baseweb="select"] > div, 
-div[data-baseweb="select"] span,
-div[data-baseweb="popover"] span,
-input {
-    color: #f8fafc !important;
-}
-div[data-baseweb="select"] > div,
-input {
-    background-color: #1e293b !important;
-}
-div[data-baseweb="popover"] {
-    background-color: #1e293b !important;
-}
-[data-testid="stExpanderDetails"] {
-    background-color: #0f172a;
-    border-radius: 8px;
-    padding: 10px;
-}
-[data-testid="stExpanderDetails"] p, 
-[data-testid="stExpanderDetails"] li {
-    color: #cbd5e1 !important;
-}
-[data-testid="stExpanderDetails"] strong, [data-testid="stExpanderDetails"] b {
-    color: #38bdf8 !important;
-}
-.stTabs button {
-    background-color: transparent !important;
-}
-.stTabs button p, .stTabs button span {
-    color: #f8fafc !important;
-    font-weight: 600 !important;
-    font-size: 16px !important;
-}
-.stTabs button[aria-selected="true"] p, .stTabs button[aria-selected="true"] span {
-    color: #38bdf8 !important;
-}
 </style>
 """, unsafe_allow_html=True)
+
 
 # Define dictionaries for options
 targ_opts = {
@@ -723,286 +710,317 @@ def update_calc():
 if 'res' not in st.session_state:
     update_calc()
 
-tab1, tab2, tab3, tab4 = st.tabs(["Setup", "Cálculos Analíticos", "Desenho 2D", "Scripts CFD/CAD"])
+# Render layout
+st.markdown("<div class='custom-header'><h1>Simulador de Trocador de Calor</h1><p>Casco-tubos & Banco de Tubos • Otimização Térmica e Hidráulica</p></div>", unsafe_allow_html=True)
 
-with tab1:
-    st.markdown("### 🧮 Balanço Térmico (Variável Desconhecida / Alvo)")
+col_inputs, col_results = st.columns([1, 3], gap="large")
+
+with col_inputs:
+    st.markdown("<div class='sidebar-header'>⚙️ Parâmetros de Projeto</div>", unsafe_allow_html=True)
     
-    col_bal_1, col_bal_2 = st.columns(2)
-    with col_bal_1:
-        st.selectbox("Calcular:", list(targ_opts.keys()), format_func=lambda x: targ_opts[x], key='s_targ', on_change=update_calc)
-    with col_bal_2:
-        st.number_input("Fluxo de Calor Desejado (kW)", key='s_heat_duty', disabled=(st.session_state.s_targ != 'heat_duty'), on_change=update_calc)
+    st.selectbox("Calcular:", list(targ_opts.keys()), format_func=lambda x: targ_opts[x], key='s_targ', on_change=update_calc)
+    if st.session_state.s_targ == 'heat_duty':
+        st.number_input("Fluxo de Calor Desejado (kW)", key='s_heat_duty', on_change=update_calc)
+    
+    st.selectbox("Fluido Interno (Tubos)", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_h_fluid', on_change=update_calc)
+    st.selectbox("Fluido Externo (Casco)", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_c_fluid', on_change=update_calc)
+    
+    col_v1, col_v2 = st.columns(2)
+    with col_v1:
+        if st.session_state.s_targ != 'hot_mdot':
+            st.number_input("Vazão Tubos (kg/s)", key='s_h_mdot', on_change=update_calc)
+    with col_v2:
+        if st.session_state.s_targ != 'cold_mdot':
+            st.number_input("Vazão Casco (kg/s)", key='s_c_mdot', on_change=update_calc)
+            
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.number_input("T. Ent Tubo (°C)", key='s_h_in', on_change=update_calc)
+    with col_t2:
+        if st.session_state.s_targ not in ['hot_outlet', 'heat_duty']:
+            st.number_input("T. Sai Tubo (°C)", key='s_h_out', on_change=update_calc)
+
+    col_t3, col_t4 = st.columns(2)
+    with col_t3:
+        st.number_input("T. Ent Casco (°C)", key='s_c_in', on_change=update_calc)
+    with col_t4:
+        if st.session_state.s_targ not in ['cold_outlet', 'heat_duty']:
+            st.number_input("T. Sai Casco (°C)", key='s_c_out', on_change=update_calc)
 
     st.markdown("---")
+    st.selectbox("Tipo de Trocador", list(geom_opts.keys()), format_func=lambda x: geom_opts[x], key='s_g_type', on_change=update_calc)
+    st.selectbox("Material do Tubo", list(mat_opts.keys()), format_func=lambda x: mat_opts[x], key='s_mat', on_change=update_calc)
+    
+    row_g1, row_g2 = st.columns(2)
+    with row_g1:
+        st.number_input("Diâm. Casco (m)", key='s_do', step=0.01, format="%.3f", on_change=update_calc)
+    with row_g2:
+        if st.session_state.s_g_type == 'shell-tube':
+            st.number_input("Espaç. Chicanas (m)", key='s_baffle', step=0.01, format="%.3f", on_change=update_calc)
 
-    col_hot, col_cold = st.columns(2)
-
-    with col_hot:
-        st.markdown("### 🌡️ Fluido Quente (Tubos)")
-        st.selectbox("Tipo de Fluido Quente", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_h_fluid', on_change=update_calc)
-        st.number_input("Temp. Entrada Quente (°C)", key='s_h_in', on_change=update_calc)
-        st.number_input("Vazão Mássica Quente (kg/s)", key='s_h_mdot', disabled=(st.session_state.s_targ == 'hot_mdot'), on_change=update_calc)
-        st.number_input("Temp. Saída Quente (°C) (Alvo/Calculado)", key='s_h_out', disabled=(st.session_state.s_targ in ['hot_outlet', 'heat_duty']), on_change=update_calc)
-
-    with col_cold:
-        st.markdown("### 💧 Fluido Frio (Casco)")
-        st.selectbox("Tipo de Fluido Frio", list(fluid_opts.keys()), format_func=lambda x: fluid_opts[x], key='s_c_fluid', on_change=update_calc)
-        st.number_input("Temp. Entrada Fria (°C)", key='s_c_in', on_change=update_calc)
-        st.number_input("Vazão Mássica Fria (kg/s)", key='s_c_mdot', disabled=(st.session_state.s_targ == 'cold_mdot'), on_change=update_calc)
-        st.number_input("Temp. Saída Fria (°C) (Alvo/Calculado)", key='s_c_out', disabled=(st.session_state.s_targ in ['cold_outlet', 'heat_duty']), on_change=update_calc)
-
-    st.markdown("---")
-
-    col_geom, col_foul = st.columns(2)
-    with col_geom:
-        st.markdown("### 📦 Geometria Externa & Tubos")
-        st.selectbox("Tipo de Trocador", list(geom_opts.keys()), format_func=lambda x: geom_opts[x], key='s_g_type', on_change=update_calc)
-        st.selectbox("Material de Construção", list(mat_opts.keys()), format_func=lambda x: mat_opts[x], key='s_mat', on_change=update_calc)
+    row_g3, row_g4 = st.columns(2)
+    with row_g3:
+        st.number_input("Ø Ext. Tubo (mm)", key='s_t_do', step=0.1, format="%.2f", on_change=update_calc)
+    with row_g4:
+        st.number_input("Espessura (mm)", key='s_t_th', step=0.1, format="%.2f", on_change=update_calc)
         
-        row1_g1, row1_g2 = st.columns(2)
-        with row1_g1:
-            st.number_input("Diâmetro / Largura (m)", key='s_do', step=0.01, format="%.3f", on_change=update_calc)
-        with row1_g2:
-            st.number_input("Espaç. Chicanas (m)", key='s_baffle', disabled=(st.session_state.s_g_type != 'shell-tube'), step=0.01, format="%.3f", on_change=update_calc)
+    row_g5, row_g6 = st.columns(2)
+    with row_g5:
+        st.number_input("Comprimento (m)", key='s_length', step=0.1, format="%.2f", on_change=update_calc)
+    with row_g6:
+        st.number_input("Passo (mm)", key='s_t_pitch', step=0.1, format="%.2f", on_change=update_calc)
 
-        row2_g1, row2_g2, row2_g3 = st.columns(3)
-        with row2_g1:
-            st.number_input("Ø Ext. Tubo(mm)", key='s_t_do', step=0.1, format="%.2f", on_change=update_calc)
-        with row2_g2:
-            st.number_input("Espessura (mm)", key='s_t_th', step=0.1, format="%.2f", on_change=update_calc)
-        with row2_g3:
-            st.number_input("Comp. (m)", key='s_length', step=0.1, format="%.2f", on_change=update_calc)
+    row_g7, row_g8 = st.columns(2)
+    with row_g7:
+        if st.session_state.s_g_type == 'cross-flow-bank':
+            st.selectbox("Arranjo", list(arr_opts.keys()), format_func=lambda x: arr_opts[x], key='s_arr', on_change=update_calc)
+        else:
+            st.number_input("Passes Tubo (N)", key='s_t_passes', on_change=update_calc)
+    with row_g8:
+        if st.session_state.s_g_type == 'cross-flow-bank':
+            st.number_input("P. Long. (SL) mm", key='s_t_pl', on_change=update_calc)
+            
+    st.markdown("---")
+    st.markdown("**Limites para Análise de Fouling**")
+    row_f5, row_f6 = st.columns(2)
+    with row_f5:
+        st.number_input("Fouling Tubos (m²K/W)", format="%.4f", key='s_f_h', on_change=update_calc)
+    with row_f6:
+        st.number_input("Fouling Casco (m²K/W)", format="%.4f", key='s_f_c', on_change=update_calc)
+        
+    st.markdown("<div class='execute-btn'>", unsafe_allow_html=True)
+    if st.button("Simular", use_container_width=True, type="primary"):
+        update_calc()
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        row3_g1, row3_g2, row3_g3 = st.columns(3)
-        with row3_g1:
-            st.number_input("Passo (mm)", key='s_t_pitch', step=0.1, format="%.2f", on_change=update_calc)
-            st.selectbox("Arranjo", list(arr_opts.keys()), format_func=lambda x: arr_opts[x], key='s_arr', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
-        with row3_g2:
-            st.number_input("Passes Tubo (N)", key='s_t_passes', disabled=(st.session_state.s_g_type != 'shell-tube'), on_change=update_calc)
-        with row3_g3:
-            st.number_input("P. Long. (SL) mm", key='s_t_pl', disabled=(st.session_state.s_g_type == 'shell-tube'), on_change=update_calc)
-
-    with col_foul:
-        st.markdown("### ⚙️ Fator de Encrustração (Fouling)")
-        st.number_input("Fator Quente (m².K/W)", format="%.4f", key='s_f_h', on_change=update_calc)
-        st.number_input("Fator Frio (m².K/W)", format="%.4f", key='s_f_c', on_change=update_calc)
-
-with tab2:
+with col_results:
     if 'res' in st.session_state and st.session_state['res'] is not None:
         res = st.session_state['res']
         
         if res['warnings']:
             for w in res['warnings']:
-                st.error(w)
+                st.warning(w)
 
-        st.write("### 📈 Desempenho Termodinâmico")
-        col_res1, col_res2, col_res3, col_res4, col_res5, col_res6 = st.columns(6)
-        col_res1.metric("Calor Troc. (kW)", f"{(res['q']/1000):.2f}")
-        col_res2.metric("LMTD (°C)", f"{res['lmtd']:.2f}")
-        col_res3.metric("Fator F", f"{res['F']:.2f}")
-        col_res4.metric("T Saída Q. (°C)", f"{res['hotOutletT']:.2f}")
-        col_res5.metric("T Saída F. (°C)", f"{res['coldOutletT']:.2f}")
-        col_res6.metric("U Global (W/m²K)", f"{res['U']:.1f}")
-        
-        st.write("### 📐 Dimensionamento da Geometria")
-        col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-        col_g1.metric("Área Necess. (m²)", f"{res['Area']:.2f}")
-        col_g2.metric("Nº Tubos", res['Nt'])
-        col_g3.metric("Vel. Tubos (m/s)", f"{res['v_t']:.3f}")
-        col_g4.metric("Vel. Casco (m/s)", f"{res['v_s']:.3f}")
-
-        st.write("### 🔬 Fenômenos de Transporte")
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-        col_f1.metric("Reynolds Tubos", f"{res['Re_t']:.0f}")
-        col_f2.metric("Reynolds Casco", f"{res['Re_s']:.0f}")
-        col_f3.metric("ΔP Tubos (kPa)", f"{(res['deltaPTube']/1000):.2f}")
-        col_f4.metric("ΔP Casco (kPa)", f"{(res['deltaPShell']/1000):.2f}")
-
-        with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
-            st.markdown("\n\n".join(res['steps']))
-    else:
-        st.info("Os resultados da simulação em tempo real aparecerão aqui caso haja dados válidos no Setup.")
-
-with tab3:
-    st.write("### Modelos da Geometria (2D e Isométrico)")
-    if 'state' in st.session_state:
-        stt = st.session_state['state']
-        rs = st.session_state['res']
-        
-        do = stt['shellDo'] * 1000  # meters to mm
-        pt = stt['tubePitch']
-        n_tubes = min(rs['Nt'], 1000)
-        
-        col_t3_1, col_t3_2 = st.columns(2)
-        with col_t3_1:
-            st.markdown("#### Vista de Seção Transversal")
-            svg_elements = []
-            svg_width = 400
-            svg_height = 400
-            center_x = svg_width / 2
-            center_y = svg_height / 2
-            scale = min(svg_width, svg_height) / (do * 1.2) if do > 0 and stt['geometryType'] == 'shell-tube' else min(svg_width, svg_height) / (math.sqrt(n_tubes) * pt * 1.2) if n_tubes > 0 and pt > 0 else 1
-            
-            if stt['geometryType'] == 'shell-tube':
-                # Draw shell
-                svg_elements.append(f'<circle cx="{center_x}" cy="{center_y}" r="{do/2 * scale}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+        # 1. Balanço Térmico & Dimensões Finais side by side
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            with st.container(border=True):
+                st.markdown("#### ⚖️ Balanço Térmico")
+                col_r11, col_r12 = st.columns([2, 1])
+                col_r11.write("Calor Trocado (Q):")
+                col_r12.write(f"**{(res['q']/1000):.2f} kW**")
                 
-                pts_side = math.ceil(math.sqrt(n_tubes) * 1.2)
-                count = 0
-                for i in range(-pts_side, pts_side):
-                    for j in range(-pts_side, pts_side):
-                        x_dist = i * pt
-                        y_dist = j * pt
-                        
-                        if x_dist*x_dist + y_dist*y_dist < ((do/2)*0.9)**2:
-                            cx = center_x + x_dist * scale
-                            cy = center_y + y_dist * scale
-                            r = (stt['tubeDo']/2) * scale
-                            svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
-                            count += 1
-                            if count >= n_tubes: break
-                    if count >= n_tubes: break
-            else:
-                w = math.sqrt(n_tubes) * pt
-                w_scaled = w * scale
-                rect_x = center_x - w_scaled/2
-                rect_y = center_y - w_scaled/2
-                svg_elements.append(f'<rect x="{rect_x}" y="{rect_y}" width="{w_scaled}" height="{w_scaled}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+                col_r11.write("LMTD:")
+                col_r12.write(f"**{res['lmtd']:.2f} °C**")
                 
-                pts_side = math.ceil(math.sqrt(n_tubes))
-                count = 0
-                is_staggered = stt['bundleAlignment'] == 'staggered'
-                for i in range(pts_side):
-                    for j in range(pts_side):
-                        offset = pt/2 if (is_staggered and i%2!=0) else 0
-                        x_dist = -w/2 + i * pt + offset
-                        y_dist = -w/2 + j * pt
-                        
-                        if (x_dist < w/2) and (y_dist < w/2):
-                            cx = center_x + x_dist * scale
-                            cy = center_y + y_dist * scale
-                            r = (stt['tubeDo']/2) * scale
-                            svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
-                            count += 1
-                            if count >= n_tubes: break
-                    if count >= n_tubes: break
+                col_r11.write("T. Saída Quente:")
+                col_r12.write(f"**{res['hotOutletT']:.2f} °C**")
 
-            svg_content = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-<svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
-{"".join(svg_elements)}
-</svg>
-</div>'''
-            st.markdown(svg_content, unsafe_allow_html=True)
-            
-        with col_t3_2:
-            st.markdown("#### Diagrama Isométrico (Esquemático de Fluxos)")
-            
-            # Simple Schematic logic
-            schematic_svg = f'''<div style="background-color: #0f172a; padding: 10px; border-radius: 12px; border: 1px solid #1e293b; display: flex; justify-content: center;">
-<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-<defs>
-<linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-<stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-<stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
-</linearGradient>
-<linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-<stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
-<stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
-</linearGradient>
-</defs>
-<!-- Cylinder / Core Body -->
-<path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
-<path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
-<!-- Hot Fluid In (Red) - Tubes -->
-<path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none" marker-end="url(#arrowHot)"/>
-<polygon points="100,195 110,200 100,205" fill="#f97316"/>
-<text x="30" y="190" fill="#f8fafc" font-size="12">Quente (IN)</text>
-<!-- Hot Fluid Out -->
-<path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
-<polygon points="380,195 390,200 380,205" fill="#f97316"/>
-<text x="330" y="190" fill="#f8fafc" font-size="12">Quente (OUT)</text>
-<!-- Cold Fluid In (Blue) - Shell/Bank -->
-<path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-<polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
-<text x="210" y="340" fill="#f8fafc" font-size="12">Frio (IN)</text>
-<!-- Cold Fluid Out -->
-<path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
-<polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
-<text x="210" y="60" fill="#f8fafc" font-size="12">Frio (OUT)</text>
-</svg>
-</div>'''
-            st.markdown(schematic_svg, unsafe_allow_html=True)
+                col_r11.write("T. Saída Fria:")
+                col_r12.write(f"**{res['coldOutletT']:.2f} °C**")
+                
+                col_r11.write("Fator de Correção (F):")
+                col_r12.write(f"**{res['F']:.3f}**")
+
+        with col_r2:
+            with st.container(border=True):
+                st.markdown("#### 📐 Dimensões Finais")
+                col_r21, col_r22 = st.columns([2, 1])
+                col_r21.write("Nº de Tubos (Nt):")
+                col_r22.write(f"**{res['Nt']}**")
+                
+                col_r21.write("Área de Troca (A):")
+                col_r22.write(f"**{res['Area']:.2f} m²**")
+                
+                col_r21.write("Coef. Global (U):")
+                col_r22.write(f"**{res['U']:.1f} W/m²K**")
+                
+                col_r21.write("Vel. Tubos:")
+                col_r22.write(f"**{res['v_t']:.3f} m/s**")
+                
+                col_r21.write("Vel. Casco:")
+                col_r22.write(f"**{res['v_s']:.3f} m/s**")
+
+        # 2. Avaliação Hidrodinâmica
+        with st.container(border=True):
+            st.markdown("#### 🌊 Avaliação Hidrodinâmica")
+            col_h1, col_h2 = st.columns(2)
+            with col_h1:
+                st.markdown("**LADO TUBOS**")
+                c1, c2 = st.columns([2, 1])
+                c1.write("Regime (Re):")
+                c2.write(f"**{res['Re_t']:.0f}**")
+                c1.write("Perda de Carga (ΔP):")
+                c2.write(f"**{(res['deltaPTube']/1000):.2f} kPa**")
+            with col_h2:
+                st.markdown("**LADO CASCO**")
+                c3, c4 = st.columns([2, 1])
+                c3.write("Regime (Re):")
+                c4.write(f"**{res['Re_s']:.0f}**")
+                c3.write("Perda de Carga (ΔP):")
+                c4.write(f"**{(res['deltaPShell']/1000):.2f} kPa**")
 
         st.markdown("---")
-        st.write("### 💻 Script SolidWorks Macro (VBA)")
-        st.code(generate_solidworks_macro(stt, rs), language="vbnet")
+        with st.expander("📄 Memória de Cálculo (Passo a Passo)"):
+            st.markdown("\n\n".join(res['steps']))
         
-    else:
-         st.info("Ajuste os parâmetros iniciais na aba Setup para renderizar a geometria.")
-
-with tab4:
-    if 'state' in st.session_state:
-        stt = st.session_state['state']
-        rs = st.session_state['res']
-        
-        st.write("### Geração de Scripts CFD (OpenFOAM / Fluent)")
-        
-        cfd_col1, cfd_col2 = st.columns([1, 2])
-        
-        with cfd_col1:
-            st.markdown("#### Configurações Base")
-            sim_type = st.radio("Método", ['Permanente (Steady)', 'Transiente'])
-            turb_model = st.selectbox("Modelo de Turbulência", ['k-epsilon Standard', 'k-omega SST'])
-            y_plus = st.number_input("Valor Y+ Almejado (Camada Limite)", value=35.0, min_value=0.1)
-            
-            if sim_type == 'Permanente (Steady)':
-                iter_total = st.number_input("Iterações Máximas", value=500, min_value=10)
-                stt['iterSteady'] = iter_total
-            else:
-                st.markdown("#### Configurações Transientes")
-                time_steps = st.number_input("Número de Time-Steps", value=100, min_value=1)
-                iter_per_step = st.number_input("Iterações por Time-Step", value=20, min_value=1)
-                # Courant Number based estimation: dt = C * (dx / v). Approximate dx ~ D_eq / 10
-                # Just estimating based on v_max
-                v_max = max(rs['v_t'], rs['v_s'])
-                L_char = (stt['tubeDi']/1000) if stt['solveTarget'] == 'hot_outlet' else (stt['tubeDo']/1000)
-                dt_estimate = L_char / v_max if v_max > 0 else 0.01
-                dt_size = st.number_input("Tamanho do Time-Step (s)", value=float(f"{dt_estimate:.4e}"), format="%.4e")
+        with st.expander("🖼️ Desenho 2D & Diagramas", expanded=True):
+            if 'state' in st.session_state:
+                stt = st.session_state['state']
+                rs = st.session_state['res']
+                do = stt['shellDo'] * 1000  # meters to mm
+                pt = stt['tubePitch']
+                n_tubes = min(rs['Nt'], 1000)
                 
-                stt['timeSteps'] = time_steps
-                stt['iterPerStep'] = iter_per_step
-                rs['estimatedTimeStep'] = dt_size
+                col_t3_1, col_t3_2 = st.columns(2)
+                with col_t3_1:
+                    st.markdown("#### Vista de Seção Transversal")
+                    svg_elements = []
+                    svg_width = 400
+                    svg_height = 400
+                    center_x = svg_width / 2
+                    center_y = svg_height / 2
+                    scale = min(svg_width, svg_height) / (do * 1.2) if do > 0 and stt['geometryType'] == 'shell-tube' else min(svg_width, svg_height) / (math.sqrt(n_tubes) * pt * 1.2) if n_tubes > 0 and pt > 0 else 1
+                    
+                    if stt['geometryType'] == 'shell-tube':
+                        svg_elements.append(f'<circle cx="{center_x}" cy="{center_y}" r="{do/2 * scale}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+                        pts_side = math.ceil(math.sqrt(n_tubes) * 1.2)
+                        count = 0
+                        for i in range(-pts_side, pts_side):
+                            for j in range(-pts_side, pts_side):
+                                x_dist = i * pt
+                                y_dist = j * pt
+                                if x_dist*x_dist + y_dist*y_dist < ((do/2)*0.9)**2:
+                                    cx = center_x + x_dist * scale
+                                    cy = center_y + y_dist * scale
+                                    r = (stt['tubeDo']/2) * scale
+                                    svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                                    count += 1
+                                    if count >= n_tubes: break
+                            if count >= n_tubes: break
+                    else:
+                        w = math.sqrt(n_tubes) * pt
+                        w_scaled = w * scale
+                        rect_x = center_x - w_scaled/2
+                        rect_y = center_y - w_scaled/2
+                        svg_elements.append(f'<rect x="{rect_x}" y="{rect_y}" width="{w_scaled}" height="{w_scaled}" fill="none" stroke="#0ea5e9" stroke-width="3" />')
+                        pts_side = math.ceil(math.sqrt(n_tubes))
+                        count = 0
+                        is_staggered = stt['bundleAlignment'] == 'staggered'
+                        for i in range(pts_side):
+                            for j in range(pts_side):
+                                offset = pt/2 if (is_staggered and i%2!=0) else 0
+                                x_dist = -w/2 + i * pt + offset
+                                y_dist = -w/2 + j * pt
+                                if (x_dist < w/2) and (y_dist < w/2):
+                                    cx = center_x + x_dist * scale
+                                    cy = center_y + y_dist * scale
+                                    r = (stt['tubeDo']/2) * scale
+                                    svg_elements.append(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="#cbd5e1" stroke="#475569" stroke-width="1" />')
+                                    count += 1
+                                    if count >= n_tubes: break
+                            if count >= n_tubes: break
 
-            res_target = st.number_input("Critérios de Convergência (Resíduos)", value=1e-4, format="%.5f")
-            
-            # Atualiza objeto state com essas definições locais e recomputa o deltaT
-            stt['simType'] = 'transient' if sim_type == 'Transiente' else 'steady'
-            stt['turbModel'] = 'k-epsilon' if turb_model == 'k-epsilon Standard' else 'k-omega'
-            stt['yPlusTarget'] = y_plus
-            stt['residualsTarget'] = res_target
-            
-            # Recalcula Y+ scripts rapidinhos sem precisar ir pro backend pesado
-            hotF = evaluate_fluid_props(stt['hotFluidId'], stt['hotInletT'])
-            coldF = evaluate_fluid_props(stt['coldFluidId'], stt['coldInletT'])
-            cf_t = 0.058 * (rs['Re_t']**-0.2) if rs['Re_t'] > 0 else 0
-            u_tau_t = math.sqrt((cf_t * hotF['density'] * (rs['v_t']**2) / 2) / hotF['density']) if rs['v_t'] > 0 else 0.01
-            rs['dy_int'] = y_plus * hotF['mu'] / (hotF['density'] * u_tau_t) if u_tau_t > 0 else 1e-5
-            
-            cf_s = 0.058 * (max(rs['Re_s'], 1)**-0.2)
-            u_tau_s = math.sqrt((cf_s * coldF['density'] * (rs['v_s']**2) / 2) / coldF['density']) if rs['v_s'] > 0 else 0.01
-            rs['dy_ext'] = y_plus * coldF['mu'] / (coldF['density'] * u_tau_s) if u_tau_s > 0 else 1e-5
+                    svg_content = f'''<div style="background-color: #f8fafc; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; justify-content: center; height: 100%; width: 100%;">
+    <svg width="{svg_width}" height="{svg_height}" xmlns="http://www.w3.org/2000/svg">
+    {"".join(svg_elements)}
+    </svg>
+    </div>'''
+                    components.html(svg_content, height=420)
+                    
+                with col_t3_2:
+                    st.markdown("#### Diagrama Isométrico (Esquemático)")
+                    schematic_svg = f'''<div style="background-color: #f8fafc; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; justify-content: center; height: 100%; width: 100%;">
+    <svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+    <linearGradient id="hotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
+    <stop offset="100%" style="stop-color:#f97316;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="coldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+    <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+    </linearGradient>
+    </defs>
+    <!-- Cylinder / Core Body -->
+    <path d="M 120 180 L 280 140 L 320 220 L 160 260 Z" fill="#cbd5e1" stroke="#94a3b8" stroke-width="2"/>
+    <path d="M 160 260 L 320 220 L 320 240 L 160 280 Z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+    <!-- Hot In -->
+    <path d="M 40 200 L 100 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
+    <polygon points="100,195 110,200 100,205" fill="#f97316"/>
+    <text x="30" y="190" fill="#1e293b" font-size="12">Quente (IN)</text>
+    <!-- Hot Out -->
+    <path d="M 340 200 L 380 200" stroke="url(#hotGrad)" stroke-width="6" fill="none"/>
+    <polygon points="380,195 390,200 380,205" fill="#f97316"/>
+    <text x="330" y="190" fill="#1e293b" font-size="12">Quente (OUT)</text>
+    <!-- Cold In -->
+    <path d="M 220 320 L 220 270" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+    <polygon points="215,270 220,260 225,270" fill="#3b82f6"/>
+    <text x="210" y="340" fill="#1e293b" font-size="12">Frio (IN)</text>
+    <!-- Cold Out -->
+    <path d="M 220 130 L 220 80" stroke="url(#coldGrad)" stroke-width="6" fill="none"/>
+    <polygon points="215,80 220,70 225,80" fill="#0ea5e9"/>
+    <text x="210" y="60" fill="#1e293b" font-size="12">Frio (OUT)</text>
+    </svg>
+    </div>'''
+                    components.html(schematic_svg, height=420)
 
-        with cfd_col2:
-            st.markdown("#### Scripts Exportados (ANSYS Fluent TUI)")
-            
-            def render_terminal(title, content):
-                st.write(f"##### {title}")
-                st.markdown(f'<div style="background-color: #0f172a; color: #22c55e; border: 1px solid #1e293b; padding: 15px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto;">{content}</div>', unsafe_allow_html=True)
-                st.write("")
+        with st.expander("🛠️ Scripts CFD & CAD"):
+            if 'state' in st.session_state:
+                stt = st.session_state['state']
+                rs = st.session_state['res']
+                cfd_col1, cfd_col2 = st.columns([1, 2])
+                
+                with cfd_col1:
+                    st.markdown("#### Configurações CFD")
+                    sim_type = st.radio("Método CFD", ['Permanente (Steady)', 'Transiente'])
+                    turb_model = st.selectbox("Modelo de Turbulência", ['k-epsilon Standard', 'k-omega SST'])
+                    y_plus = st.number_input("Valor Y+ Almejado (Parede)", value=35.0, min_value=0.1)
+                    
+                    if sim_type == 'Permanente (Steady)':
+                        iter_total = st.number_input("Iterações Máximas", value=500, min_value=10)
+                        stt['iterSteady'] = iter_total
+                    else:
+                        time_steps = st.number_input("Núm. Time-Steps", value=100, min_value=1)
+                        iter_per_step = st.number_input("Iterações por Passo", value=20, min_value=1)
+                        v_max = max(rs['v_t'], rs['v_s'])
+                        L_char = (stt['tubeDi']/1000) if stt['solveTarget'] == 'hot_outlet' else (stt['tubeDo']/1000)
+                        dt_estimate = L_char / v_max if v_max > 0 else 0.01
+                        dt_size = st.number_input("Tamanho Time-Step (s)", value=float(f"{dt_estimate:.4e}"), format="%.4e")
+                        
+                        stt['timeSteps'] = time_steps
+                        stt['iterPerStep'] = iter_per_step
+                        rs['estimatedTimeStep'] = dt_size
 
-            render_terminal("1. Fluent Meshing (TUI) - PolyHexcore e Camada Limite", generate_fluent_meshing(stt, rs))
-            render_terminal("2. Fluent Setup & Solver (TUI) - Condições de Contorno", generate_fluent_setup(stt, rs))
-            
+                    res_target = st.number_input("Convergência (Resíduos)", value=1e-4, format="%.5f")
+                    stt['simType'] = 'transient' if sim_type == 'Transiente' else 'steady'
+                    stt['turbModel'] = 'k-epsilon' if turb_model == 'k-epsilon Standard' else 'k-omega'
+                    stt['yPlusTarget'] = y_plus
+                    stt['residualsTarget'] = res_target
+                    
+                    # Recalcula Y+ rápidos
+                    hotF = evaluate_fluid_props(stt['hotFluidId'], stt['hotInletT'])
+                    coldF = evaluate_fluid_props(stt['coldFluidId'], stt['coldInletT'])
+                    cf_t = 0.058 * (rs['Re_t']**-0.2) if rs['Re_t'] > 0 else 0
+                    u_tau_t = math.sqrt((cf_t * hotF['density'] * (rs['v_t']**2) / 2) / hotF['density']) if rs['v_t'] > 0 else 0.01
+                    rs['dy_int'] = y_plus * hotF['mu'] / (hotF['density'] * u_tau_t) if u_tau_t > 0 else 1e-5
+                    
+                    cf_s = 0.058 * (max(rs['Re_s'], 1)**-0.2)
+                    u_tau_s = math.sqrt((cf_s * coldF['density'] * (rs['v_s']**2) / 2) / coldF['density']) if rs['v_s'] > 0 else 0.01
+                    rs['dy_ext'] = y_plus * coldF['mu'] / (coldF['density'] * u_tau_s) if u_tau_s > 0 else 1e-5
+
+                with cfd_col2:
+                    st.markdown("#### Exportar TUI (Fluent)")
+                    def render_terminal(title, content):
+                        st.write(f"##### {title}")
+                        st.markdown(f'<div style="background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; font-family: monospace; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto;">{content}</div>', unsafe_allow_html=True)
+                        st.write("")
+                    render_terminal("1. Malha (Fluent Meshing TUI)", generate_fluent_meshing(stt, rs))
+                    render_terminal("2. Solver (Fluent TUI)", generate_fluent_setup(stt, rs))
+                    
+                    st.markdown("---")
+                    st.markdown("#### Exportar Modelagem (SolidWorks VBA)")
+                    st.code(generate_solidworks_macro(stt, rs), language="vbnet")
+
     else:
-        st.info("Ajuste os parâmetros iniciais na aba Setup para gerar os scripts.")
+        st.info("Ajuste os parâmetros iniciais à esquerda e clique em Simular.")
